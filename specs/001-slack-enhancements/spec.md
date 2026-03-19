@@ -52,7 +52,7 @@ Slack's "Recent" dropdown at the top of the sidebar lists recently visited chann
 
 **Acceptance Scenarios**:
 
-1. **Given** the user opens a thread (via sidebar panel or Threads page), **When** the user later opens the Recent dropdown, **Then** that thread appears in the list with identifying context (channel name, message preview or author).
+1. **Given** the user opens a thread (via sidebar panel or Threads page) or replies to a thread, **When** the user later opens the Recent dropdown, **Then** that thread appears in the list with identifying context (channel name, message preview or author). Note: merely scrolling past a thread does not count as viewing it.
 2. **Given** multiple threads have been viewed, **When** the user opens the Recent dropdown, **Then** threads appear in reverse chronological order (most recently viewed first).
 3. **Given** the user clicks a thread entry in the Recent list, **Then** Slack navigates to the channel containing that thread and opens the thread in the sidebar panel.
 4. **Given** the extension cannot inject items into Slack's Recent dropdown, **Then** the extension displays the recent threads list in the extension's popup menu as a fallback, with the same navigation behavior.
@@ -130,7 +130,7 @@ If modifying the Threads page behavior (User Story 4) is not feasible, the exten
 ### Key Entities
 
 - **Thread Entry**: Represents a tracked thread in the recent threads history. Attributes: thread root message identifier, workspace, channel name, message author, message preview, timestamp of last view, unread message count.
-- **Extension Settings**: User preferences for the extension. Attributes: redirect prevention toggle state, any per-feature enable/disable toggles.
+- **Extension Settings**: User preferences for the extension. Attributes: per-feature enable/disable toggles for each user story group (redirect prevention, quick message actions, recent threads tracking, manual thread read control). All toggles default to enabled.
 - **Message Action**: An injected button in the Slack message hover action bar. Attributes: action type (copy link or open thread), target message identifier.
 
 ## Success Criteria *(mandatory)*
@@ -145,6 +145,14 @@ If modifying the Threads page behavior (User Story 4) is not feasible, the exten
 - **SC-006**: All extension data remains local to the browser with no external network requests made by the extension.
 - **SC-007**: When Slack updates its interface, the extension's injected elements either continue to work correctly or disappear cleanly without causing errors or broken UI.
 
+## Clarifications
+
+### Session 2026-03-19
+
+- Q: Which browser(s) should the extension target? → A: Both Chrome and Firefox from the start.
+- Q: What counts as "viewing" a thread for tracking (US3)? → A: Clicking to open a thread (sidebar panel or Threads page) or replying to a thread. Scrolling past does not count.
+- Q: Which features get individual enable/disable toggles in the popup? → A: One toggle per user story group (redirect prevention, quick actions, recent threads, manual read control).
+
 ## Assumptions
 
 - Slack's message hover action bar DOM is consistent enough to reliably detect and inject buttons into.
@@ -152,3 +160,4 @@ If modifying the Threads page behavior (User Story 4) is not feasible, the exten
 - Slack's mark-as-read behavior on the Threads page is triggered by observable signals (e.g. network requests or DOM events) that can be intercepted.
 - The user will provide DOM markup samples when implementation requires inspecting the current Slack interface structure.
 - Thread history of approximately 50 entries per workspace is a reasonable default limit.
+- The extension targets both Chrome (Manifest V3) and Firefox (WebExtensions/Manifest V2) from the start. Cross-browser compatibility is a first-class requirement.
