@@ -21,7 +21,10 @@ Prevents the Threads page from automatically marking threads as read when you sc
 
 ## Pairing with a Redirect Blocker
 
-Slack's web client often tries to redirect you to the desktop app when you open a Slack link. This extension pairs well with a separate extension that blocks that redirect behavior. For Firefox, [Slack Redirect](https://addons.mozilla.org/en-US/firefox/addon/slack-redirect/) works well for this purpose.
+Slack's web client often tries to redirect you to the desktop app when you open a Slack link. This extension pairs well with a separate extension that blocks that redirect behavior:
+
+- **Firefox**: [Slack Redirect](https://addons.mozilla.org/en-US/firefox/addon/slack-redirect/)
+- **Chrome**: [Open Slack in browser, not app](https://chromewebstore.google.com/detail/open-slack-in-browser-not/jkgehijlkoolgcjifalbiicaomkngakb)
 
 ## Getting Started
 

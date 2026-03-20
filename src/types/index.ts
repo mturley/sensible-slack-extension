@@ -11,6 +11,8 @@ export interface ThreadEntry {
   channelName: string;
   author: string;
   messagePreview: string;
+  lastReplyAuthor?: string;
+  lastReplyPreview?: string;
   lastViewedAt: number;
   permalink: string;
 }

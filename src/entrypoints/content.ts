@@ -14,13 +14,19 @@ export default defineContentScript({
 
   main() {
     let currentWorkspaceId: string | null = null;
+    let featuresApplied = false;
 
     async function initialize() {
       currentWorkspaceId = getWorkspaceIdFromCurrentPage();
       if (!currentWorkspaceId) return;
 
-      const settings = await readSettings();
-      applyFeatures(settings, currentWorkspaceId);
+      try {
+        const settings = await readSettings();
+        applyFeatures(settings, currentWorkspaceId);
+        featuresApplied = true;
+      } catch {
+        // Storage may not be ready; onRouteChange will retry
+      }
     }
 
     function applyFeatures(settings: ExtensionSettings, workspaceId: string) {
@@ -53,10 +59,13 @@ export default defineContentScript({
     // SPA navigation detection
     function onRouteChange() {
       const newWorkspaceId = getWorkspaceIdFromCurrentPage();
-      if (newWorkspaceId && newWorkspaceId !== currentWorkspaceId) {
+      if (newWorkspaceId && (newWorkspaceId !== currentWorkspaceId || !featuresApplied)) {
         currentWorkspaceId = newWorkspaceId;
         readSettings().then((settings) => {
           applyFeatures(settings, currentWorkspaceId!);
+          featuresApplied = true;
+        }).catch(() => {
+          // Will retry on next interval
         });
       }
     }

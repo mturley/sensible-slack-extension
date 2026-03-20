@@ -62,7 +62,7 @@ export const SELECTORS = {
 } as const;
 
 // URL patterns
-export const SLACK_WORKSPACE_URL_PATTERN = /^https:\/\/app\.slack\.com\/client\/([A-Z0-9]+)\//;
+export const SLACK_WORKSPACE_URL_PATTERN = /^https:\/\/app\.slack\.com\/client\/([A-Z0-9]+)/;
 export const SLACK_SUBDOMAIN_PATTERN = /^https:\/\/([^.]+)\.slack\.com/;
 export const SLACK_THREAD_URL_PATTERN = /\/archives\/([A-Z0-9]+)\/p(\d+)/;
 

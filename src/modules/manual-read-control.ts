@@ -1,135 +1,242 @@
-import { querySelector, querySelectorAll, observeDOM } from '../shared/dom-utils';
-import { SELECTORS } from '../shared/constants';
+import { observeDOM } from '../shared/dom-utils';
 
 let active = false;
 let disconnectObserver: (() => void) | null = null;
-let intersectionObserver: IntersectionObserver | null = null;
-
-const MARK_READ_MARKER = 'data-se-mark-read-injected';
+let messageListener: ((message: any) => void) | null = null;
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+let wasOnThreadsPage = false;
+let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+let blockedCount = 0;
 
 export function initManualReadControl() {
   if (active) return;
   active = true;
 
-  // Only activate on the Threads page
-  if (!isThreadsPage()) {
-    // Watch for navigation to Threads page
-    disconnectObserver = observeDOM(document.body, () => {
-      if (isThreadsPage()) {
-        activateOnThreadsPage();
-      }
-    });
-    return;
+  // Listen for messages from the background script
+  messageListener = (message: any) => {
+    if (message.type === 'THREAD_MARK_BLOCKED') {
+      blockedCount++;
+      showToast(
+        `Auto-mark-as-read blocked (${blockedCount} thread${blockedCount > 1 ? 's' : ''})`
+      );
+    }
+  };
+  browser.runtime.onMessage.addListener(messageListener);
+
+  wasOnThreadsPage = isThreadsPage();
+  if (wasOnThreadsPage) {
+    setBlocking(true);
+    injectMarkReadButtons();
+    blockedCount = 0;
   }
 
-  activateOnThreadsPage();
+  if (document.body) {
+    disconnectObserver = observeDOM(document.body, () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(checkNavigation, 150);
+    });
+  }
+
+  // Periodic fallback — catches cases where the observer misses the initial render
+  pollTimer = setInterval(checkNavigation, 2000);
+}
+
+function checkNavigation() {
+  const onThreadsPage = isThreadsPage();
+
+  if (onThreadsPage && !wasOnThreadsPage) {
+    setBlocking(true);
+    injectMarkReadButtons();
+    blockedCount = 0;
+  } else if (!onThreadsPage && wasOnThreadsPage) {
+    setBlocking(false);
+  } else if (onThreadsPage) {
+    injectMarkReadButtons();
+  }
+
+  wasOnThreadsPage = onThreadsPage;
+}
+
+function setBlocking(enabled: boolean) {
+  browser.runtime.sendMessage({
+    type: enabled ? 'ENABLE_READ_CONTROL' : 'DISABLE_READ_CONTROL',
+  }).catch(() => {
+    // Extension context may be invalid
+  });
 }
 
 export function destroyManualReadControl() {
   if (!active) return;
   active = false;
 
+  if (debounceTimer) {
+    clearTimeout(debounceTimer);
+    debounceTimer = null;
+  }
+
   if (disconnectObserver) {
     disconnectObserver();
     disconnectObserver = null;
   }
 
-  if (intersectionObserver) {
-    intersectionObserver.disconnect();
-    intersectionObserver = null;
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
   }
 
-  // Remove injected buttons
+  if (messageListener) {
+    browser.runtime.onMessage.removeListener(messageListener);
+    messageListener = null;
+  }
+
+  wasOnThreadsPage = false;
+  blockedCount = 0;
+  setBlocking(false);
+
+  document.querySelectorAll('.se-toast').forEach((el) => el.remove());
   document.querySelectorAll('.se-mark-read-btn').forEach((btn) => btn.remove());
-  document.querySelectorAll(`[${MARK_READ_MARKER}]`).forEach((el) => {
-    el.removeAttribute(MARK_READ_MARKER);
-  });
 }
 
 function isThreadsPage(): boolean {
-  // Check URL pattern for threads view
-  const isThreadsUrl = /\/threads\/?$/.test(window.location.pathname);
-  if (isThreadsUrl) return true;
-
-  // Check for threads page container in DOM
-  const container = querySelector(SELECTORS.threadsPageContainer);
-  return container !== null;
-}
-
-function activateOnThreadsPage() {
-  // Block auto-mark-as-read by intercepting IntersectionObserver
-  blockAutoMarkAsRead();
-
-  // Inject "Mark as read" buttons into thread items
-  injectMarkReadButtons();
-
-  // Watch for new thread items
-  disconnectObserver = observeDOM(document.body, () => {
-    if (isThreadsPage()) {
-      injectMarkReadButtons();
-    }
-  });
-}
-
-function blockAutoMarkAsRead() {
-  // Intercept scroll-triggered visibility events that Slack uses to mark threads as read.
-  // We create our own IntersectionObserver that prevents the default behavior
-  // by stopping propagation of visibility events on thread items.
-
-  const threadContainer = querySelector(SELECTORS.threadsPageContainer);
-  if (!threadContainer) return;
-
-  // Prevent scroll events from triggering mark-as-read
-  threadContainer.addEventListener(
-    'scroll',
-    (e) => {
-      // We don't fully prevent scroll, but we can intercept
-      // Slack's visibility tracking by marking threads as "handled"
-    },
-    { passive: true }
-  );
+  return document.querySelector('[data-qa="threads_view"]') !== null;
 }
 
 function injectMarkReadButtons() {
-  const threadItems = querySelectorAll(SELECTORS.threadItem);
+  const headings = document.querySelectorAll('[data-qa="threads_view_header"]');
 
-  for (const item of threadItems) {
-    if (item.hasAttribute(MARK_READ_MARKER)) continue;
-    item.setAttribute(MARK_READ_MARKER, 'true');
+  for (const heading of headings) {
+    const listItem = heading.closest('[data-qa="virtual-list-item"]');
+    if (!listItem) continue;
 
-    const btn = document.createElement('button');
-    btn.className = 'se-mark-read-btn';
-    btn.textContent = '✓ Mark as read';
-    btn.addEventListener('click', (e) => {
+    const itemId = listItem.getAttribute('id') ?? '';
+    const match = itemId.match(/heading-([A-Z0-9]+)-(.+)/);
+    if (!match) continue;
+
+    const channel = match[1];
+    const threadTs = match[2];
+
+    // Only show button for threads with unread messages (those with a "New" divider)
+    const threadItems = getThreadListItems(channel, threadTs);
+    const hasUnread = threadItems.some(
+      (item) => item.querySelector('[data-qa="thread-marked-as-read-divider"]') !== null
+    );
+    if (!hasUnread) continue;
+
+    // Button before the reply box (footer)
+    const footerItem = threadItems.find(
+      (item) => (item.getAttribute('id') ?? '').includes('footer')
+    );
+    if (!footerItem) continue;
+
+    const replyContainer = footerItem.querySelector('[data-qa="reply_container"]');
+    if (!replyContainer) continue;
+
+    // Skip if already has a button
+    if (replyContainer.querySelector('.se-mark-read-btn')) continue;
+
+    const btn = createMarkReadButton((e) => {
       e.stopPropagation();
       e.preventDefault();
-      markThreadAsRead(item, btn);
+
+      btn.disabled = true;
+      btn.textContent = 'Marking…';
+
+      // Get token from background, then make the API call from content script (has cookies)
+      browser.runtime.sendMessage({
+        type: 'MARK_THREAD_READ',
+        channel,
+        threadTs,
+      }).then((response: any) => {
+        if (response?.error) {
+          btn.textContent = 'No token yet';
+          btn.disabled = false;
+          return;
+        }
+
+        const separator = response.url.includes('?') ? '&' : '?';
+        const allowUrl = `${response.url}${separator}_se_allow=1`;
+
+        return fetch(allowUrl, {
+          method: 'POST',
+          body: new URLSearchParams({
+            token: response.token,
+            channel,
+            thread_ts: threadTs,
+            ts: response.ts,
+            read: '1',
+          }),
+          credentials: 'include',
+        }).then((r) => r.json().then((json) => ({ status: r.status, json })));
+      }).then((result) => {
+        if (!result) return;
+        console.log('[SE DEBUG] mark-as-read response:', result);
+        if (!result.json?.ok) {
+          btn.textContent = `Failed: ${result.json?.error || result.status}`;
+          return;
+        }
+        btn.textContent = 'Marked';
+
+        // Hide the "New" divider line within this thread
+        const items = getThreadListItems(channel, threadTs);
+        for (const item of items) {
+          if (item instanceof HTMLElement && (item.id ?? '').includes('divider')) {
+            item.style.display = 'none';
+          }
+          const newDivider = item.querySelector('[data-qa="thread-marked-as-read-divider"]');
+          if (newDivider instanceof HTMLElement) {
+            newDivider.closest('[data-qa="virtual-list-item"]')
+              ?.setAttribute('style', 'display:none');
+          }
+        }
+      }).catch(() => {
+        btn.textContent = 'Failed';
+      });
     });
 
-    item.appendChild(btn);
+    replyContainer.insertBefore(btn, replyContainer.firstChild);
   }
 }
 
-function markThreadAsRead(threadItem: Element, btn: HTMLButtonElement) {
-  btn.disabled = true;
-  btn.textContent = 'Marked as read';
+function createMarkReadButton(onClick: (e: Event) => void): HTMLButtonElement {
+  const btn = document.createElement('button');
+  btn.className = 'se-mark-read-btn';
+  btn.textContent = 'Mark as read';
+  btn.addEventListener('click', onClick);
+  return btn;
+}
 
-  // Visually dim the thread item
-  if (threadItem instanceof HTMLElement) {
-    threadItem.style.opacity = '0.5';
+function showToast(message: string) {
+  let toast = document.querySelector('.se-toast') as HTMLElement | null;
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.className = 'se-toast';
+    document.body.appendChild(toast);
   }
+  toast.innerHTML = '';
+  const icon = document.createElement('span');
+  icon.textContent = '🛑';
+  icon.style.marginRight = '8px';
+  toast.appendChild(icon);
+  toast.appendChild(document.createTextNode(message));
+  toast.classList.add('se-toast--visible');
 
-  // Try to trigger Slack's native mark-as-read by simulating the action
-  // This is best-effort — Slack's internal API may not be accessible
-  try {
-    // Look for Slack's own "mark as read" or dismiss button
-    const nativeBtn = threadItem.querySelector(
-      '[data-qa="thread_mark_as_read"], [aria-label*="mark as read" i], [aria-label*="dismiss" i]'
-    );
-    if (nativeBtn instanceof HTMLElement) {
-      nativeBtn.click();
+  const existingTimer = toast.dataset.timer;
+  if (existingTimer) clearTimeout(Number(existingTimer));
+  const timer = setTimeout(() => {
+    toast.classList.remove('se-toast--visible');
+  }, 3000);
+  toast.dataset.timer = String(timer);
+}
+
+function getThreadListItems(channel: string, threadTs: string): Element[] {
+  const suffix = `${channel}-${threadTs}`;
+  const items: Element[] = [];
+  const allItems = document.querySelectorAll('[data-qa="virtual-list-item"]');
+  for (const item of allItems) {
+    const id = item.getAttribute('id') ?? '';
+    if (id.includes(suffix)) {
+      items.push(item);
     }
-  } catch {
-    // Native action not available — visual feedback only
   }
+  return items;
 }

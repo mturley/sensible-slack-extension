@@ -63,21 +63,29 @@ async function loadRecentThreads() {
   }
 
   listEl.innerHTML = '';
+  const activeTabId = activeTab.id;
   for (const thread of threads) {
-    listEl.appendChild(createThreadItem(thread));
+    listEl.appendChild(createThreadItem(thread, activeTabId));
   }
 }
 
-function createThreadItem(thread: ThreadEntry): HTMLElement {
+function createThreadItem(thread: ThreadEntry, activeTabId?: number): HTMLElement {
   const item = document.createElement('a');
   item.className = 'thread-item';
   item.href = thread.permalink;
   item.addEventListener('click', (e) => {
     e.preventDefault();
-    browser.runtime.sendMessage({
-      type: 'NAVIGATE_TO_THREAD',
-      url: thread.permalink,
-    });
+    const url = `${thread.permalink}#se-open-thread`;
+    if (activeTabId != null) {
+      // Navigate the current Slack tab instead of opening a new one
+      browser.tabs.update(activeTabId, { url });
+      window.close();
+    } else {
+      browser.runtime.sendMessage({
+        type: 'NAVIGATE_TO_THREAD',
+        url,
+      });
+    }
   });
 
   const channel = document.createElement('div');
@@ -92,13 +100,26 @@ function createThreadItem(thread: ThreadEntry): HTMLElement {
   preview.className = 'thread-preview';
   preview.textContent = thread.messagePreview;
 
+  // Show last reply if available
+  if (thread.lastReplyAuthor || thread.lastReplyPreview) {
+    const lastReply = document.createElement('div');
+    lastReply.className = 'thread-last-reply';
+    const replyAuthor = thread.lastReplyAuthor ?? 'Someone';
+    const replyText = thread.lastReplyPreview ?? '';
+    lastReply.textContent = `${replyAuthor}: ${replyText}`;
+    item.appendChild(channel);
+    item.appendChild(author);
+    item.appendChild(preview);
+    item.appendChild(lastReply);
+  } else {
+    item.appendChild(channel);
+    item.appendChild(author);
+    item.appendChild(preview);
+  }
+
   const time = document.createElement('div');
   time.className = 'thread-time';
   time.textContent = formatRelativeTime(thread.lastViewedAt);
-
-  item.appendChild(channel);
-  item.appendChild(author);
-  item.appendChild(preview);
   item.appendChild(time);
 
   return item;

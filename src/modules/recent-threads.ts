@@ -80,6 +80,19 @@ function extractThreadEntry(threadPanel: Element): ThreadEntry | null {
 
     if (!threadId || !channelId) return null;
 
+    // Extract last reply info (last message that isn't the root)
+    let lastReplyAuthor: string | undefined;
+    let lastReplyPreview: string | undefined;
+    if (messages.length > 1) {
+      const lastMessage = messages[messages.length - 1];
+      const lastAuthorEl = querySelector(SELECTORS.messageAuthor, lastMessage);
+      lastReplyAuthor = lastAuthorEl ? getTextContent(lastAuthorEl) : undefined;
+      const lastTextEl = querySelector(SELECTORS.messageText, lastMessage);
+      lastReplyPreview = lastTextEl
+        ? getTextContent(lastTextEl, MESSAGE_PREVIEW_MAX_LENGTH)
+        : undefined;
+    }
+
     return {
       threadId,
       workspaceId: currentWorkspaceId,
@@ -87,6 +100,8 @@ function extractThreadEntry(threadPanel: Element): ThreadEntry | null {
       channelName: channelName ?? channelId,
       author,
       messagePreview,
+      lastReplyAuthor,
+      lastReplyPreview,
       lastViewedAt: Date.now(),
       permalink,
     };
