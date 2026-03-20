@@ -91,7 +91,17 @@ function attachToolbar(messageContainer: Element) {
     'Open thread in new tab',
     () => {
       const link = permalink ?? extractPermalink(messageContainer);
-      if (link) window.open(link + '#se-open-thread', '_blank');
+      if (!link) return;
+      // Extract timestamp and store intent so the new tab knows to open the thread
+      const tsMatch = link.match(/\/p(\d+)/);
+      if (tsMatch) {
+        const rawTs = tsMatch[1];
+        const dataTs = rawTs.length > 6
+          ? `${rawTs.slice(0, -6)}.${rawTs.slice(-6)}`
+          : rawTs;
+        browser.storage.local.set({ 'se-open-thread-ts': dataTs });
+      }
+      window.open(link, '_blank');
     }
   );
 
@@ -112,7 +122,10 @@ function attachToolbar(messageContainer: Element) {
   toolbar.appendChild(threadBtn);
   toolbar.appendChild(splitBtn);
   toolbar.appendChild(unreadBtn);
-  messageContainer.appendChild(toolbar);
+
+  // Append inside the hover target so hovering our toolbar doesn't trigger mouseleave on it
+  const hoverTarget = messageContainer.querySelector('[class*="c-message_kit__hover"]');
+  (hoverTarget ?? messageContainer).appendChild(toolbar);
 }
 
 async function openInSplitView(messageContainer: Element) {
@@ -128,95 +141,101 @@ async function openInSplitView(messageContainer: Element) {
     }
   }
 
-  // If no reply bar, trigger the hover action bar with pointer events
+  // If no reply bar, the thread button is already visible since we're hovering
   if (!clicked) {
-    const hoverTarget =
-      messageContainer.querySelector('[class*="c-message_kit__hover"]') ?? messageContainer;
-    hoverTarget.dispatchEvent(new PointerEvent('pointerenter', { bubbles: true }));
-    hoverTarget.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
-    hoverTarget.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
-    hoverTarget.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-    await sleep(400);
-
-    for (const selector of ['[data-qa="start_thread"]', '[data-qa="reply_in_thread"]', 'button[aria-label="View thread"]', 'button[aria-label="Reply in thread"]']) {
-      const btn = messageContainer.querySelector(selector);
-      if (btn instanceof HTMLElement) {
-        btn.click();
-        clicked = true;
-        break;
-      }
+    const searchRoot = messageContainer.parentElement ?? messageContainer;
+    const threadBtn = await waitForSelector(searchRoot, [
+      '[data-qa="start_thread"]',
+      '[data-qa="reply_in_thread"]',
+      'button[aria-label="View thread"]',
+      'button[aria-label="Reply in thread"]',
+    ], 2000);
+    if (threadBtn) {
+      threadBtn.click();
+      clicked = true;
     }
   }
 
   if (!clicked) return;
 
   // Step 2: Wait for the thread panel to open
-  let threadPanel: Element | null = null;
-  const deadline = Date.now() + 5000;
-  while (!threadPanel && Date.now() < deadline) {
-    threadPanel = document.querySelector('[data-qa="threads_flexpane"]');
-    if (!threadPanel) await sleep(300);
-  }
+  const threadPanel = await waitForSelector(document.documentElement, ['[data-qa="threads_flexpane"]'], 5000);
   if (!threadPanel) return;
 
-  // Step 3: Click the kebab/more menu in the flexpane header
-  await sleep(500);
-  const kebab = document.querySelector('[data-qa="secondary-header-more"]') as HTMLElement | null;
+  // Step 3: Wait for and click the kebab/more menu in the flexpane header
+  const kebab = await waitForSelector(document.documentElement, ['[data-qa="secondary-header-more"]'], 2000);
   if (!kebab) return;
   kebab.click();
-  await sleep(400);
 
   // Step 4: Find and click "Open in split view" in the menu
-  const menuItems = document.querySelectorAll(
-    '[role="menuitem"], [role="option"], [data-qa="menu_item"]'
+  const splitItem = await waitForMatch(
+    () => {
+      for (const item of document.querySelectorAll(
+        '[role="menuitem"], [role="option"], [data-qa="menu_item"]'
+      )) {
+        if ((item.textContent ?? '').toLowerCase().includes('split') && item instanceof HTMLElement) {
+          return item;
+        }
+      }
+      return null;
+    },
+    2000
   );
-  for (const item of menuItems) {
-    if ((item.textContent ?? '').toLowerCase().includes('split') && item instanceof HTMLElement) {
-      item.click();
-      return;
-    }
-  }
+  if (splitItem) splitItem.click();
 }
 
 async function markUnread(messageContainer: Element) {
-  // Trigger hover to show Slack's native action bar
-  const hoverTarget =
-    messageContainer.querySelector('[class*="c-message_kit__hover"]') ?? messageContainer;
-  hoverTarget.dispatchEvent(new PointerEvent('pointerenter', { bubbles: true }));
-  hoverTarget.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
-  hoverTarget.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
-  hoverTarget.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-  await sleep(400);
-
-  // Click the "More actions" (kebab) button on the message
+  // Click the "More actions" (kebab) button — already visible since we're hovering the message
   const moreSelectors = [
     '[data-qa="more_message_actions"]',
     'button[aria-label="More actions"]',
     'button[aria-label="More message actions"]',
   ];
-  let moreBtn: HTMLElement | null = null;
   const searchRoot = messageContainer.parentElement ?? messageContainer;
-  for (const selector of moreSelectors) {
-    moreBtn = searchRoot.querySelector(selector) as HTMLElement | null;
-    if (moreBtn) break;
-  }
+  const moreBtn = await waitForSelector(searchRoot, moreSelectors, 2000);
   if (!moreBtn) return;
   moreBtn.click();
-  await sleep(400);
 
-  // Find and click "Mark unread" in the context menu
-  const menuItems = document.querySelectorAll(
-    '[role="menuitem"], [role="option"], [data-qa="menu_item"], [data-qa="mark_unread"]'
+  // Poll for "Mark unread" menu item
+  const unreadItem = await waitForMatch(
+    () => {
+      for (const item of document.querySelectorAll(
+        '[role="menuitem"], [role="option"], [data-qa="menu_item"], [data-qa="mark_unread"]'
+      )) {
+        if ((item.textContent ?? '').toLowerCase().includes('mark unread') && item instanceof HTMLElement) {
+          return item;
+        }
+      }
+      return null;
+    },
+    2000
   );
-  for (const item of menuItems) {
-    if (
-      (item.textContent ?? '').toLowerCase().includes('mark unread') &&
-      item instanceof HTMLElement
-    ) {
-      item.click();
-      return;
+  if (unreadItem) unreadItem.click();
+}
+
+function waitForSelector(root: Element, selectors: string[], timeout: number): Promise<HTMLElement | null> {
+  return waitForMatch(() => {
+    for (const sel of selectors) {
+      const el = root.querySelector(sel);
+      if (el instanceof HTMLElement) return el;
     }
-  }
+    return null;
+  }, timeout);
+}
+
+function waitForMatch<T>(finder: () => T | null, timeout: number): Promise<T | null> {
+  return new Promise((resolve) => {
+    const result = finder();
+    if (result) { resolve(result); return; }
+    const deadline = Date.now() + timeout;
+    const interval = setInterval(() => {
+      const found = finder();
+      if (found || Date.now() > deadline) {
+        clearInterval(interval);
+        resolve(found);
+      }
+    }, 30);
+  });
 }
 
 function sleep(ms: number): Promise<void> {

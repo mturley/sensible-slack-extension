@@ -1,7 +1,6 @@
 import { getWorkspaceIdFromCurrentPage } from '../shared/workspace';
 import { readSettings, onSettingsChange } from '../shared/settings';
 import { SPA_HEALTH_CHECK_INTERVAL } from '../shared/constants';
-import { waitForElement } from '../shared/dom-utils';
 import type { ExtensionSettings } from '../types';
 import { initMessageActions, destroyMessageActions } from '../modules/message-actions';
 import { initManualReadControl, destroyManualReadControl } from '../modules/manual-read-control';
@@ -69,59 +68,56 @@ export default defineContentScript({
     // Periodic health check for SPA navigation edge cases
     setInterval(onRouteChange, SPA_HEALTH_CHECK_INTERVAL);
 
-    // Auto-open thread if URL has #se-open-thread marker
+    // Auto-open thread if extension storage has a pending open-thread intent
     async function checkOpenThreadMarker() {
-      if (!window.location.hash.includes('se-open-thread')) return;
+      const result = await browser.storage.local.get('se-open-thread-ts');
+      const dataTs = result['se-open-thread-ts'];
+      if (!dataTs) return;
 
-      // Clean up the hash
-      history.replaceState(null, '', window.location.href.replace('#se-open-thread', ''));
+      // Clear the intent immediately so it doesn't trigger again
+      await browser.storage.local.remove('se-open-thread-ts');
 
-      // Extract message timestamp from the permalink URL
-      // Format: /archives/CHANNEL/pTIMESTAMP (e.g. p1234567890123456)
-      const tsMatch = window.location.pathname.match(/\/p(\d+)/);
-      if (!tsMatch) return;
-
-      // Convert to Slack's data-ts format: "1234567890.123456"
-      const rawTs = tsMatch[1];
-      const dataTs = rawTs.length > 6
-        ? `${rawTs.slice(0, -6)}.${rawTs.slice(-6)}`
-        : rawTs;
-
-      // Wait for the target message to render (retry for up to 10s)
+      // Wait for the target message to render (retry for up to 15s)
       let targetMsg: Element | null = null;
-      const deadline = Date.now() + 10000;
+      const deadline = Date.now() + 15000;
       while (!targetMsg && Date.now() < deadline) {
-        targetMsg = document.querySelector(`[data-ts="${dataTs}"]`);
+        targetMsg =
+          document.querySelector(`[data-msg-ts="${dataTs}"]`) ??
+          document.querySelector(`[data-ts="${dataTs}"]`);
         if (!targetMsg) {
-          await new Promise((r) => setTimeout(r, 500));
+          await new Promise((r) => setTimeout(r, 300));
         }
       }
       if (!targetMsg) return;
 
-      // Hover the message to trigger action bar, then click reply
-      targetMsg.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
-      targetMsg.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-      await new Promise((r) => setTimeout(r, 600));
+      // Try clicking the reply bar first (for messages with existing replies)
+      for (const selector of ['[data-qa="reply_bar_count"]', '[data-qa="reply_bar_view_thread"]', '[data-qa="reply_bar"]']) {
+        const btn = targetMsg.querySelector(selector);
+        if (btn instanceof HTMLElement) {
+          btn.click();
+          return;
+        }
+      }
 
-      const replySelectors = [
-        '[data-qa="reply_in_thread"]',
-        'button[aria-label="Reply in thread"]',
-        'button[aria-label="Reply to thread"]',
-        '[class*="c-message__reply_bar"]',
-      ];
+      // Otherwise, hover and click the thread button from the action bar
+      const hoverTarget =
+        targetMsg.querySelector('[class*="c-message_kit__hover"]') ?? targetMsg;
+      hoverTarget.dispatchEvent(new PointerEvent('pointerenter', { bubbles: true }));
+      hoverTarget.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+      hoverTarget.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+      hoverTarget.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
 
-      // Look within the message and its siblings (action bar may be adjacent)
       const searchRoot = targetMsg.parentElement ?? targetMsg;
-      for (const selector of replySelectors) {
-        try {
+      const btnDeadline = Date.now() + 3000;
+      while (Date.now() < btnDeadline) {
+        for (const selector of ['[data-qa="start_thread"]', '[data-qa="reply_in_thread"]', 'button[aria-label="Reply in thread"]', 'button[aria-label="View thread"]']) {
           const btn = searchRoot.querySelector(selector);
           if (btn instanceof HTMLElement) {
             btn.click();
             return;
           }
-        } catch {
-          // try next
         }
+        await new Promise((r) => setTimeout(r, 50));
       }
     }
 

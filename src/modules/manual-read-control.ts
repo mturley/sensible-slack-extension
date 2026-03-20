@@ -2,36 +2,59 @@ import { observeDOM } from '../shared/dom-utils';
 
 let active = false;
 let disconnectObserver: (() => void) | null = null;
-let messageListener: ((message: any) => void) | null = null;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let wasOnThreadsPage = false;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let blockedCount = 0;
+let interceptListener: ((e: Event) => void) | null = null;
+let capturedToken: { token: string; url: string } | null = null;
+// Store the full blocked request params per thread (channel-threadTs -> params)
+const blockedRequests = new Map<string, { token: string; url: string; channel: string; thread_ts: string; ts: string }>();
 
 export function initManualReadControl() {
   if (active) return;
   active = true;
 
-  // Listen for messages from the background script
-  messageListener = (message: any) => {
-    if (message.type === 'THREAD_MARK_BLOCKED') {
-      blockedCount++;
-      showToast(
-        `Auto-mark-as-read blocked (${blockedCount} thread${blockedCount > 1 ? 's' : ''})`
-      );
+  // Listen for blocked mark-as-read events from the MAIN world script
+  interceptListener = (e: Event) => {
+    blockedCount++;
+    showToast(
+      `Auto-mark-as-read blocked (${blockedCount} thread${blockedCount > 1 ? 's' : ''})`
+    );
+
+    // Capture token and per-thread params from the intercepted request
+    try {
+      const detail = JSON.parse((e as CustomEvent).detail);
+      if (detail.token && detail.url) {
+        capturedToken = { token: detail.token, url: detail.url };
+      }
+      if (detail.channel && detail.thread_ts && detail.ts) {
+        const key = `${detail.channel}-${detail.thread_ts}`;
+        // Keep the latest ts for each thread
+        const existing = blockedRequests.get(key);
+        if (!existing || detail.ts > existing.ts) {
+          blockedRequests.set(key, {
+            token: detail.token,
+            url: detail.url,
+            channel: detail.channel,
+            thread_ts: detail.thread_ts,
+            ts: detail.ts,
+          });
+        }
+      }
+    } catch {
+      // Ignore parse errors
     }
   };
-  browser.runtime.onMessage.addListener(messageListener);
+  document.addEventListener('se-thread-mark-intercepted', interceptListener);
 
-  wasOnThreadsPage = isThreadsPage();
-  if (wasOnThreadsPage) {
-    setBlocking(true);
-    injectMarkReadButtons();
-    blockedCount = 0;
-  }
+  updateBlockingAttribute();
 
   if (document.body) {
     disconnectObserver = observeDOM(document.body, () => {
+      // Update blocking attribute immediately (no debounce) so requests
+      // on other pages aren't blocked during navigation transitions
+      updateBlockingAttribute();
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(checkNavigation, 150);
     });
@@ -44,25 +67,24 @@ export function initManualReadControl() {
 function checkNavigation() {
   const onThreadsPage = isThreadsPage();
 
-  if (onThreadsPage && !wasOnThreadsPage) {
-    setBlocking(true);
+  updateBlockingAttribute();
+
+  if (onThreadsPage) {
     injectMarkReadButtons();
-    blockedCount = 0;
-  } else if (!onThreadsPage && wasOnThreadsPage) {
-    setBlocking(false);
-  } else if (onThreadsPage) {
-    injectMarkReadButtons();
+    if (!wasOnThreadsPage) {
+      blockedCount = 0;
+    }
   }
 
   wasOnThreadsPage = onThreadsPage;
 }
 
-function setBlocking(enabled: boolean) {
-  browser.runtime.sendMessage({
-    type: enabled ? 'ENABLE_READ_CONTROL' : 'DISABLE_READ_CONTROL',
-  }).catch(() => {
-    // Extension context may be invalid
-  });
+function updateBlockingAttribute() {
+  if (isThreadsPage()) {
+    document.documentElement.setAttribute('data-se-block-thread-marks', '');
+  } else {
+    document.documentElement.removeAttribute('data-se-block-thread-marks');
+  }
 }
 
 export function destroyManualReadControl() {
@@ -84,14 +106,17 @@ export function destroyManualReadControl() {
     pollTimer = null;
   }
 
-  if (messageListener) {
-    browser.runtime.onMessage.removeListener(messageListener);
-    messageListener = null;
+  if (interceptListener) {
+    document.removeEventListener('se-thread-mark-intercepted', interceptListener);
+    interceptListener = null;
   }
+
+  document.documentElement.removeAttribute('data-se-block-thread-marks');
 
   wasOnThreadsPage = false;
   blockedCount = 0;
-  setBlocking(false);
+  capturedToken = null;
+  blockedRequests.clear();
 
   document.querySelectorAll('.se-toast').forEach((el) => el.remove());
   document.querySelectorAll('.se-mark-read-btn').forEach((btn) => btn.remove());
@@ -99,6 +124,39 @@ export function destroyManualReadControl() {
 
 function isThreadsPage(): boolean {
   return document.querySelector('[data-qa="threads_view"]') !== null;
+}
+
+async function getToken(): Promise<{ token: string; url: string } | null> {
+  // Prefer token captured from intercepted XHR in MAIN world
+  if (capturedToken) return capturedToken;
+
+  // Fall back to background script (captured via webRequest)
+  try {
+    const response = await browser.runtime.sendMessage({ type: 'GET_TOKEN' });
+    if (response?.token && response?.url) return response;
+  } catch {
+    // Extension context may be invalid
+  }
+  return null;
+}
+
+function getLatestMessageTs(channel: string, threadTs: string): string {
+  const threadItems = getThreadListItems(channel, threadTs);
+  let latestTs = threadTs;
+
+  for (const item of threadItems) {
+    const id = item.getAttribute('id') ?? '';
+    // Message items: threads_view-CHANNEL-threadTs-messageTs
+    // Skip special items: threads_view_heading-, threads_view_footer-, etc.
+    const match = id.match(/^threads_view-[A-Z0-9]+-[\d.]+-(.+)$/);
+    if (match) {
+      const messageTs = match[1];
+      if (messageTs > latestTs) {
+        latestTs = messageTs;
+      }
+    }
+  }
+  return latestTs;
 }
 
 function injectMarkReadButtons() {
@@ -139,62 +197,76 @@ function injectMarkReadButtons() {
       e.preventDefault();
 
       btn.disabled = true;
-      btn.textContent = 'Marking…';
+      btn.textContent = 'Marking\u2026';
 
-      // Get token from background, then make the API call from content script (has cookies)
-      browser.runtime.sendMessage({
-        type: 'MARK_THREAD_READ',
-        channel,
-        threadTs,
-      }).then((response: any) => {
-        if (response?.error) {
-          btn.textContent = 'No token yet';
-          btn.disabled = false;
-          return;
-        }
+      const threadKey = `${channel}-${threadTs}`;
+      const blocked = blockedRequests.get(threadKey);
 
-        const separator = response.url.includes('?') ? '&' : '?';
-        const allowUrl = `${response.url}${separator}_se_allow=1`;
-
-        return fetch(allowUrl, {
-          method: 'POST',
-          body: new URLSearchParams({
-            token: response.token,
+      if (!blocked) {
+        // Fall back to token + DOM-based ts if no blocked request was captured
+        getToken().then((tokenInfo) => {
+          if (!tokenInfo) {
+            btn.textContent = 'No token yet';
+            btn.disabled = false;
+            return;
+          }
+          return replayMarkAsRead(btn, {
+            token: tokenInfo.token,
+            url: tokenInfo.url,
             channel,
             thread_ts: threadTs,
-            ts: response.ts,
-            read: '1',
-          }),
-          credentials: 'include',
-        }).then((r) => r.json().then((json) => ({ status: r.status, json })));
-      }).then((result) => {
-        if (!result) return;
-        console.log('[SE DEBUG] mark-as-read response:', result);
-        if (!result.json?.ok) {
-          btn.textContent = `Failed: ${result.json?.error || result.status}`;
-          return;
-        }
-        btn.textContent = 'Marked';
+            ts: getLatestMessageTs(channel, threadTs),
+          });
+        }).catch(() => { btn.textContent = 'Failed'; });
+        return;
+      }
 
-        // Hide the "New" divider line within this thread
-        const items = getThreadListItems(channel, threadTs);
-        for (const item of items) {
-          if (item instanceof HTMLElement && (item.id ?? '').includes('divider')) {
-            item.style.display = 'none';
-          }
-          const newDivider = item.querySelector('[data-qa="thread-marked-as-read-divider"]');
-          if (newDivider instanceof HTMLElement) {
-            newDivider.closest('[data-qa="virtual-list-item"]')
-              ?.setAttribute('style', 'display:none');
-          }
-        }
-      }).catch(() => {
-        btn.textContent = 'Failed';
-      });
+      // Replay the exact blocked request
+      replayMarkAsRead(btn, blocked).catch(() => { btn.textContent = 'Failed'; });
     });
 
     replyContainer.insertBefore(btn, replyContainer.firstChild);
   }
+}
+
+function replayMarkAsRead(
+  btn: HTMLButtonElement,
+  params: { token: string; url: string; channel: string; thread_ts: string; ts: string },
+): Promise<void> {
+  return new Promise<{ ok: boolean; error?: string }>((resolve) => {
+    const onResult = (evt: Event) => {
+      document.removeEventListener('se-mark-thread-read-result', onResult);
+      try {
+        resolve(JSON.parse((evt as CustomEvent).detail));
+      } catch {
+        resolve({ ok: false, error: 'parse_error' });
+      }
+    };
+    document.addEventListener('se-mark-thread-read-result', onResult);
+
+    document.dispatchEvent(new CustomEvent('se-mark-thread-read', {
+      detail: JSON.stringify(params),
+    }));
+  }).then((result) => {
+    if (!result.ok) {
+      btn.textContent = `Failed: ${result.error || 'unknown'}`;
+      return;
+    }
+    btn.textContent = 'Marked';
+
+    // Hide the "New" divider line within this thread
+    const items = getThreadListItems(params.channel, params.thread_ts);
+    for (const item of items) {
+      if (item instanceof HTMLElement && (item.id ?? '').includes('divider')) {
+        item.style.display = 'none';
+      }
+      const newDivider = item.querySelector('[data-qa="thread-marked-as-read-divider"]');
+      if (newDivider instanceof HTMLElement) {
+        newDivider.closest('[data-qa="virtual-list-item"]')
+          ?.setAttribute('style', 'display:none');
+      }
+    }
+  });
 }
 
 function createMarkReadButton(onClick: (e: Event) => void): HTMLButtonElement {
@@ -214,7 +286,7 @@ function showToast(message: string) {
   }
   toast.innerHTML = '';
   const icon = document.createElement('span');
-  icon.textContent = '🛑';
+  icon.textContent = '\u{1F6D1}';
   icon.style.marginRight = '8px';
   toast.appendChild(icon);
   toast.appendChild(document.createTextNode(message));
