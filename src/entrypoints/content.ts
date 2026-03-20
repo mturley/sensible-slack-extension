@@ -68,15 +68,14 @@ export default defineContentScript({
     // Periodic health check for SPA navigation edge cases
     setInterval(onRouteChange, SPA_HEALTH_CHECK_INTERVAL);
 
-    // Auto-open thread if extension storage has a pending open-thread intent
-    async function checkOpenThreadMarker() {
-      const result = await browser.storage.local.get('se-open-thread-ts');
-      const dataTs = result['se-open-thread-ts'];
-      if (!dataTs) return;
+    // Listen for OPEN_THREAD messages from the background script
+    browser.runtime.onMessage.addListener((message: { type: string; ts?: string }) => {
+      if (message.type === 'OPEN_THREAD' && message.ts) {
+        openThreadByTs(message.ts);
+      }
+    });
 
-      // Clear the intent immediately so it doesn't trigger again
-      await browser.storage.local.remove('se-open-thread-ts');
-
+    async function openThreadByTs(dataTs: string) {
       // Wait for the target message to render (retry for up to 15s)
       let targetMsg: Element | null = null;
       const deadline = Date.now() + 15000;
@@ -123,13 +122,9 @@ export default defineContentScript({
 
     // Initialize when DOM is ready
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => {
-        initialize();
-        checkOpenThreadMarker();
-      });
+      document.addEventListener('DOMContentLoaded', initialize);
     } else {
       initialize();
-      checkOpenThreadMarker();
     }
   },
 });

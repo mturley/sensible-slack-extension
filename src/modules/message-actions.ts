@@ -92,16 +92,13 @@ function attachToolbar(messageContainer: Element) {
     () => {
       const link = permalink ?? extractPermalink(messageContainer);
       if (!link) return;
-      // Extract timestamp and store intent so the new tab knows to open the thread
       const tsMatch = link.match(/\/p(\d+)/);
-      if (tsMatch) {
-        const rawTs = tsMatch[1];
-        const dataTs = rawTs.length > 6
-          ? `${rawTs.slice(0, -6)}.${rawTs.slice(-6)}`
-          : rawTs;
-        browser.storage.local.set({ 'se-open-thread-ts': dataTs });
-      }
-      window.open(link, '_blank');
+      if (!tsMatch) return;
+      const rawTs = tsMatch[1];
+      const dataTs = rawTs.length > 6
+        ? `${rawTs.slice(0, -6)}.${rawTs.slice(-6)}`
+        : rawTs;
+      browser.runtime.sendMessage({ type: 'OPEN_THREAD_TAB', url: link, ts: dataTs });
     }
   );
 
