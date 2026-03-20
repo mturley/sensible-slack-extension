@@ -102,9 +102,16 @@ function attachToolbar(messageContainer: Element) {
     () => openInSplitView(messageContainer)
   );
 
+  const unreadBtn = createButton(
+    '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a6 6 0 0 0-6 6 6 6 0 0 0 6 6 6 6 0 0 0 6-6 6 6 0 0 0-6-6zm0 1.5a4.5 4.5 0 0 1 4.5 4.5A4.5 4.5 0 0 1 8 12.5 4.5 4.5 0 0 1 3.5 8 4.5 4.5 0 0 1 8 3.5z"/><circle cx="8" cy="8" r="2.5"/></svg>',
+    'Mark unread',
+    () => markUnread(messageContainer)
+  );
+
   toolbar.appendChild(copyBtn);
   toolbar.appendChild(threadBtn);
   toolbar.appendChild(splitBtn);
+  toolbar.appendChild(unreadBtn);
   messageContainer.appendChild(toolbar);
 }
 
@@ -171,6 +178,47 @@ async function openInSplitView(messageContainer: Element) {
   }
 }
 
+async function markUnread(messageContainer: Element) {
+  // Trigger hover to show Slack's native action bar
+  const hoverTarget =
+    messageContainer.querySelector('[class*="c-message_kit__hover"]') ?? messageContainer;
+  hoverTarget.dispatchEvent(new PointerEvent('pointerenter', { bubbles: true }));
+  hoverTarget.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+  hoverTarget.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+  hoverTarget.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+  await sleep(400);
+
+  // Click the "More actions" (kebab) button on the message
+  const moreSelectors = [
+    '[data-qa="more_message_actions"]',
+    'button[aria-label="More actions"]',
+    'button[aria-label="More message actions"]',
+  ];
+  let moreBtn: HTMLElement | null = null;
+  const searchRoot = messageContainer.parentElement ?? messageContainer;
+  for (const selector of moreSelectors) {
+    moreBtn = searchRoot.querySelector(selector) as HTMLElement | null;
+    if (moreBtn) break;
+  }
+  if (!moreBtn) return;
+  moreBtn.click();
+  await sleep(400);
+
+  // Find and click "Mark unread" in the context menu
+  const menuItems = document.querySelectorAll(
+    '[role="menuitem"], [role="option"], [data-qa="menu_item"], [data-qa="mark_unread"]'
+  );
+  for (const item of menuItems) {
+    if (
+      (item.textContent ?? '').toLowerCase().includes('mark unread') &&
+      item instanceof HTMLElement
+    ) {
+      item.click();
+      return;
+    }
+  }
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -182,9 +230,14 @@ function createButton(
 ): HTMLButtonElement {
   const btn = document.createElement('button');
   btn.className = 'se-action-btn';
-  btn.title = label;
   btn.setAttribute('aria-label', label);
   btn.innerHTML = svgHtml;
+
+  const tooltip = document.createElement('span');
+  tooltip.className = 'se-tooltip';
+  tooltip.textContent = label;
+  btn.appendChild(tooltip);
+
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
     e.preventDefault();
