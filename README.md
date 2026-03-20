@@ -6,6 +6,18 @@ A browser extension that adds quality-of-life improvements to the Slack web inte
 
 All features can be individually toggled from the extension popup.
 
+![Toggle menu](docs/screenshots/toggle-menu.png)to
+
+### Manual Thread Read Control
+
+Prevents the Threads page from automatically marking threads as read as you scroll past them. Instead:
+
+- Automatic `subscriptions.thread.mark` API calls are intercepted at the XHR level and suppressed with fake success responses, so Slack doesn't retry.
+- A **"Mark as read"** button appears on each thread with unread messages, letting you explicitly dismiss them.
+- Threads viewed on other pages (channels, DMs) are still marked as read normally.
+
+![Manual thread read control](docs/screenshots/manual-thread-read-control.png)
+
 ### Quick Message Actions
 
 Adds a secondary toolbar on message hover with shortcuts that are normally buried in menus:
@@ -17,13 +29,7 @@ Adds a secondary toolbar on message hover with shortcuts that are normally burie
 
 Each action can be individually enabled or disabled in the popup settings.
 
-### Manual Thread Read Control
-
-Prevents the Threads page from automatically marking threads as read as you scroll past them. Instead:
-
-- Automatic `subscriptions.thread.mark` API calls are intercepted at the XHR level and suppressed with fake success responses, so Slack doesn't retry.
-- A **"Mark as read"** button appears on each thread with unread messages, letting you explicitly dismiss them.
-- Threads viewed on other pages (channels, DMs) are still marked as read normally.
+![Quick message actions](docs/screenshots/quick-message-actions.png)
 
 #### How it works
 
