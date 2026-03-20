@@ -1,0 +1,182 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  color: #1d1c1d;
+  background: #fff;
+}
+
+.popup {
+  width: 380px;
+  padding: 16px;
+}
+
+h1 {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  color: #1d1c1d;
+}
+
+h2 {
+  font-size: 13px;
+  font-weight: 600;
+  color: #616061;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle-label {
+  font-size: 14px;
+  color: #1d1c1d;
+}
+
+.toggle-row input[type="checkbox"] {
+  appearance: none;
+  width: 36px;
+  height: 20px;
+  background: #ccc;
+  border-radius: 10px;
+  position: relative;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  flex-shrink: 0;
+}
+
+.toggle-row input[type="checkbox"]::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+
+.toggle-row input[type="checkbox"]:checked {
+  background: #007a5a;
+}
+
+.toggle-row input[type="checkbox"]:checked::after {
+  transform: translateX(16px);
+}
+
+.toggle-slider {
+  display: none;
+}
+
+.sub-toggles {
+  padding-left: 16px;
+  border-left: 2px solid #e0e0e0;
+  margin-left: 4px;
+}
+
+.sub-toggles.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.sub-toggle .toggle-label {
+  font-size: 13px;
+  color: #616061;
+}
+
+.sub-toggle {
+  padding: 4px 0;
+}
+
+/* Injected action button styles (used in content script) */
+.se-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #616061;
+  font-size: 16px;
+  transition: background-color 0.1s, color 0.1s;
+}
+
+.se-action-btn:hover {
+  background: rgba(29, 28, 29, 0.08);
+  color: #1d1c1d;
+}
+
+.se-action-btn .tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  background: #1d1c1d;
+  color: #fff;
+  font-size: 12px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.se-action-btn:hover .tooltip {
+  opacity: 1;
+}
+
+.se-copied-feedback {
+  color: #007a5a;
+  font-weight: 600;
+}
+
+/* Mark as read button */
+.se-mark-read-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  margin-top: 4px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: #fff;
+  color: #616061;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.1s, color 0.1s;
+}
+
+.se-mark-read-btn:hover {
+  background: #f0f0f0;
+  color: #1d1c1d;
+}
+
+.se-mark-read-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

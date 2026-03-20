@@ -1,50 +1,124 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+  Sync Impact Report
+  ===================
+  Version change: N/A (initial) -> 1.0.0
+  Modified principles: N/A (initial population)
+  Added sections:
+    - Core Principles (5 principles)
+    - Technology & Constraints
+    - Development Workflow
+    - Governance
+  Removed sections: None
+  Templates requiring updates:
+    - plan-template.md: ✅ compatible (Constitution Check is generic)
+    - spec-template.md: ✅ compatible (no principle-specific references)
+    - tasks-template.md: ✅ compatible (no principle-specific references)
+  Follow-up TODOs: None
+-->
+
+# Slack Enhancements Extension Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Minimal Permissions
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+The extension MUST request only the browser permissions strictly
+necessary for its current functionality. Broad host permissions,
+background persistence, and access to unrelated APIs are prohibited
+unless a specific feature requires them and the rationale is
+documented. Each permission MUST be justified in the manifest.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+**Rationale**: Browser extensions operate in a trust-sensitive
+environment. Over-requesting permissions erodes user trust and
+increases attack surface.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### II. User Privacy
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+The extension MUST NOT collect, transmit, or store user data beyond
+what is essential for its features to function. All data MUST remain
+local to the user's browser unless the user explicitly opts in to
+external communication. No analytics, telemetry, or tracking of any
+kind without informed, affirmative consent.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+**Rationale**: Users install productivity extensions expecting their
+Slack data to remain private. Violating this expectation is a
+non-negotiable trust boundary.
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### III. Non-Intrusive Enhancements
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+The extension MUST enhance the existing Slack web UI without
+disrupting the user's workflow. Enhancements MUST be additive, not
+replacements. The extension MUST NOT break existing Slack
+functionality, intercept or modify messages in transit, or inject
+UI elements that obscure native controls. If Slack updates break an
+enhancement, the extension MUST degrade gracefully rather than
+error visibly.
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+**Rationale**: A broken or intrusive enhancement is worse than no
+enhancement. Users must always be able to use Slack normally
+regardless of the extension's state.
+
+### IV. Simplicity & Maintainability
+
+Prefer the simplest implementation that satisfies requirements.
+Avoid premature abstractions, unnecessary dependencies, and
+over-engineering. The codebase MUST remain small enough that any
+single contributor can understand the entire project. New features
+MUST justify their complexity relative to user value.
+
+**Rationale**: Browser extension APIs evolve, Slack's DOM changes
+without notice, and maintenance burden compounds. Simplicity is a
+survival strategy.
+
+### V. Cross-Browser Compatibility
+
+The extension MUST target the WebExtensions API standard (Manifest
+V3) and MUST work in Chrome and Firefox at minimum. Browser-specific
+APIs are permitted only when wrapped behind a compatibility layer.
+All features MUST be tested in each supported browser before release.
+
+**Rationale**: Users should not be locked into a single browser.
+Building on standards from the start avoids costly rewrites later.
+
+## Technology & Constraints
+
+- **Extension Standard**: WebExtensions API, Manifest V3
+- **Supported Browsers**: Chrome, Firefox (minimum); Safari, Edge
+  (stretch goals)
+- **Language**: TypeScript (strict mode)
+- **Build Tool**: To be determined during first feature planning
+- **Content Security**: The extension MUST NOT use `eval()`,
+  inline scripts, or remote code loading
+- **Slack DOM Dependency**: Features that rely on Slack's DOM
+  structure MUST use resilient selectors and document their
+  assumptions so breakage is easy to diagnose
+
+## Development Workflow
+
+- All changes require a feature branch and code review before
+  merging to `main`
+- Commits MUST be signed off (`--signoff`)
+- Manual testing in at least one supported browser is required
+  before merging
+- Releases follow semantic versioning (MAJOR.MINOR.PATCH)
+- The extension MUST be installable from source (no mandatory
+  web store dependency for development)
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+This constitution is the authoritative guide for project decisions.
+When a proposed change conflicts with a principle above, the
+principle takes precedence unless the constitution is formally
+amended first.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Amendment process**:
+1. Propose the change with rationale in a PR modifying this file
+2. Document the version bump (MAJOR for principle removal/redefinition,
+   MINOR for additions, PATCH for clarifications)
+3. Update the version line below upon merge
+
+**Compliance**: All PRs and code reviews SHOULD verify alignment
+with these principles. Complexity or permission additions MUST
+reference the relevant principle and justify the deviation.
+
+**Version**: 1.0.0 | **Ratified**: 2026-03-19 | **Last Amended**: 2026-03-19
