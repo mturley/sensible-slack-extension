@@ -17,10 +17,10 @@
 
 **Purpose**: Initialize WXT project, TypeScript configuration, and extension scaffolding
 
-- [ ] T001 Initialize WXT project with TypeScript strict mode in project root (wxt.config.ts, package.json, tsconfig.json)
-- [ ] T002 Create extension icon assets in src/assets/icons/ (16x16, 32x32, 48x48, 128x128 PNG placeholders)
-- [ ] T003 Configure Vitest for unit testing in vitest.config.ts and add test scripts to package.json
-- [ ] T004 Create .gitignore with Node.js, WXT output (.output/, .wxt/), and editor patterns
+- [x] T001 Initialize WXT project with TypeScript strict mode in project root (wxt.config.ts, package.json, tsconfig.json)
+- [x] T002 Create extension icon assets in src/assets/icons/ (16x16, 32x32, 48x48, 128x128 PNG placeholders)
+- [x] T003 Configure Vitest for unit testing in vitest.config.ts and add test scripts to package.json
+- [x] T004 Create .gitignore with Node.js, WXT output (.output/, .wxt/), and editor patterns
 
 ---
 
@@ -30,15 +30,15 @@
 
 **CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T005 Define shared TypeScript types (ExtensionSettings, ThreadEntry, StorageSchema) in src/types/index.ts
-- [ ] T006 [P] Implement typed storage wrapper with get/set/remove operations in src/shared/storage.ts
-- [ ] T007 [P] Implement settings manager with defaults (all toggles true), read, write, and onChange listener in src/shared/settings.ts
-- [ ] T008 [P] Implement workspace ID detection from Slack URL patterns in src/shared/workspace.ts
-- [ ] T009 [P] Implement resilient DOM selector utilities with fallback chains and try-catch isolation in src/shared/dom-utils.ts
-- [ ] T010 [P] Define shared constants (storage keys, selector patterns, limits) in src/shared/constants.ts
-- [ ] T011 Create content script entrypoint that detects workspace, reads settings, and conditionally initializes feature modules in src/entrypoints/content.ts
-- [ ] T012 Create background service worker that handles message routing and settings change events in src/entrypoints/background.ts
-- [ ] T013 Create popup HTML shell with 4 feature toggle switches and a recent threads container in src/entrypoints/popup/index.html, src/entrypoints/popup/main.ts, src/entrypoints/popup/style.css
+- [x] T005 Define shared TypeScript types (ExtensionSettings, ThreadEntry, StorageSchema) in src/types/index.ts
+- [x] T006 [P] Implement typed storage wrapper with get/set/remove operations in src/shared/storage.ts
+- [x] T007 [P] Implement settings manager with defaults (all toggles true), read, write, and onChange listener in src/shared/settings.ts
+- [x] T008 [P] Implement workspace ID detection from Slack URL patterns in src/shared/workspace.ts
+- [x] T009 [P] Implement resilient DOM selector utilities with fallback chains and try-catch isolation in src/shared/dom-utils.ts
+- [x] T010 [P] Define shared constants (storage keys, selector patterns, limits) in src/shared/constants.ts
+- [x] T011 Create content script entrypoint that detects workspace, reads settings, and conditionally initializes feature modules in src/entrypoints/content.ts
+- [x] T012 Create background service worker that handles message routing and settings change events in src/entrypoints/background.ts
+- [x] T013 Create popup HTML shell with 4 feature toggle switches and a recent threads container in src/entrypoints/popup/index.html, src/entrypoints/popup/main.ts, src/entrypoints/popup/style.css
 
 **Checkpoint**: Foundation ready — extension loads in Chrome/Firefox with popup showing 4 toggles, content script injected on Slack pages
 
@@ -52,10 +52,10 @@
 
 ### Implementation for User Story 1
 
-- [ ] T014 [US1] Implement redirect prevention module with content script logic to intercept slack:// protocol navigations, block interstitial redirect pages, and listen for settings toggle changes in src/modules/redirect-prevention.ts
-- [ ] T015 [US1] Add declarativeNetRequest rules for HTTP-level redirect blocking in src/entrypoints/background.ts (add rule registration) and create redirect-rules.json if WXT supports static rule files
-- [ ] T016 [US1] Wire redirect prevention toggle in popup to settings and add visual feedback for toggle state in src/entrypoints/popup/main.ts
-- [ ] T017 [US1] Integrate redirect prevention module into content script initialization (conditional on settings) in src/entrypoints/content.ts
+- [x] T014 [US1] Implement redirect prevention module with content script logic to intercept slack:// protocol navigations, block interstitial redirect pages, and listen for settings toggle changes in src/modules/redirect-prevention.ts
+- [x] T015 [US1] Add declarativeNetRequest rules for HTTP-level redirect blocking in src/entrypoints/background.ts (add rule registration) and create redirect-rules.json if WXT supports static rule files
+- [x] T016 [US1] Wire redirect prevention toggle in popup to settings and add visual feedback for toggle state in src/entrypoints/popup/main.ts
+- [x] T017 [US1] Integrate redirect prevention module into content script initialization (conditional on settings) in src/entrypoints/content.ts
 
 **Checkpoint**: US1 complete — Slack links open in web interface; toggle in popup enables/disables the feature; works in Chrome and Firefox
 
@@ -69,10 +69,10 @@
 
 ### Implementation for User Story 2
 
-- [ ] T018 [US2] Implement message actions module with MutationObserver-based button injection, permalink extraction from message DOM, clipboard copy with "Copied!" tooltip, and open-thread-in-new-tab logic in src/modules/message-actions.ts
-- [ ] T019 [US2] Add CSS styles for injected action buttons matching Slack's visual style in src/entrypoints/popup/style.css or as injected styles in the content script
-- [ ] T020 [US2] Wire message actions toggle in popup to settings in src/entrypoints/popup/main.ts
-- [ ] T021 [US2] Integrate message actions module into content script with SPA navigation awareness (re-inject on route change) in src/entrypoints/content.ts
+- [x] T018 [US2] Implement message actions module with MutationObserver-based button injection, permalink extraction from message DOM, clipboard copy with "Copied!" tooltip, and open-thread-in-new-tab logic in src/modules/message-actions.ts
+- [x] T019 [US2] Add CSS styles for injected action buttons matching Slack's visual style in src/entrypoints/popup/style.css or as injected styles in the content script
+- [x] T020 [US2] Wire message actions toggle in popup to settings in src/entrypoints/popup/main.ts
+- [x] T021 [US2] Integrate message actions module into content script with SPA navigation awareness (re-inject on route change) in src/entrypoints/content.ts
 
 **Checkpoint**: US2 complete — hover buttons appear on messages; "Copy link" copies permalink; "Open thread" opens new tab; graceful degradation if DOM changes
 
@@ -86,10 +86,10 @@
 
 ### Implementation for User Story 3
 
-- [ ] T022 [US3] Implement recent threads module with thread view detection (click-to-open and reply events via MutationObserver), ThreadEntry creation from DOM context, and storage of workspace-scoped thread history (max 50, LRU eviction) in src/modules/recent-threads.ts
-- [ ] T023 [US3] Add recent threads list UI to the extension popup showing thread entries with channel name, author, message preview, and clickable navigation in src/entrypoints/popup/main.ts and src/entrypoints/popup/index.html
-- [ ] T024 [US3] Add message passing between content script and popup for thread list retrieval and navigation commands in src/entrypoints/background.ts
-- [ ] T025 [US3] Wire recent threads toggle in popup to settings and integrate module into content script initialization in src/entrypoints/content.ts
+- [x] T022 [US3] Implement recent threads module with thread view detection (click-to-open and reply events via MutationObserver), ThreadEntry creation from DOM context, and storage of workspace-scoped thread history (max 50, LRU eviction) in src/modules/recent-threads.ts
+- [x] T023 [US3] Add recent threads list UI to the extension popup showing thread entries with channel name, author, message preview, and clickable navigation in src/entrypoints/popup/main.ts and src/entrypoints/popup/index.html
+- [x] T024 [US3] Add message passing between content script and popup for thread list retrieval and navigation commands in src/entrypoints/background.ts
+- [x] T025 [US3] Wire recent threads toggle in popup to settings and integrate module into content script initialization in src/entrypoints/content.ts
 
 **Checkpoint**: US3 complete — threads tracked on view/reply; popup shows recent threads list; clicking navigates to thread; history scoped per workspace; oldest entries evicted at 50
 
@@ -105,10 +105,10 @@
 
 ### Implementation for User Story 4
 
-- [ ] T026 [US4] Research and prototype mark-as-read signal interception on the Threads page: identify the DOM events, network requests, or IntersectionObserver callbacks that trigger Slack's auto-mark-as-read, and document findings in specs/001-slack-enhancements/research.md (append as R7)
-- [ ] T027 [US4] Implement manual read control module with Threads page detection, auto-mark-as-read blocking, "Mark as read" button injection after last message in each thread, button state management (disabled after click, re-enabled on new messages) in src/modules/manual-read-control.ts
-- [ ] T028 [US4] Wire manual read control toggle in popup to settings and integrate module into content script with Threads page route detection in src/entrypoints/content.ts
-- [ ] T029 [US4] Handle edge case: if user leaves Threads page and returns, threads not explicitly marked as read must still show as unread in src/modules/manual-read-control.ts
+- [x] T026 [US4] Research and prototype mark-as-read signal interception on the Threads page: identify the DOM events, network requests, or IntersectionObserver callbacks that trigger Slack's auto-mark-as-read, and document findings in specs/001-slack-enhancements/research.md (append as R7)
+- [x] T027 [US4] Implement manual read control module with Threads page detection, auto-mark-as-read blocking, "Mark as read" button injection after last message in each thread, button state management (disabled after click, re-enabled on new messages) in src/modules/manual-read-control.ts
+- [x] T028 [US4] Wire manual read control toggle in popup to settings and integrate module into content script with Threads page route detection in src/entrypoints/content.ts
+- [x] T029 [US4] Handle edge case: if user leaves Threads page and returns, threads not explicitly marked as read must still show as unread in src/modules/manual-read-control.ts
 
 **Checkpoint**: US4 complete — scrolling on Threads page does not auto-mark threads as read; "Mark as read" button works per-thread; feature scoped to Threads page only
 
@@ -118,12 +118,12 @@
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T030 [P] Add unit tests for storage wrapper in tests/unit/storage.test.ts
-- [ ] T031 [P] Add unit tests for settings manager in tests/unit/settings.test.ts
-- [ ] T032 [P] Add unit tests for recent threads logic (add, update, eviction, workspace scoping) in tests/unit/recent-threads.test.ts
-- [ ] T033 [P] Add unit tests for workspace detection in tests/unit/workspace.test.ts
-- [ ] T034 Verify extension loads and all features work in both Chrome and Firefox (manual cross-browser testing per quickstart.md)
-- [ ] T035 Add graceful degradation badge indicator on extension icon when DOM injection fails in src/entrypoints/background.ts
+- [x] T030 [P] Add unit tests for storage wrapper in tests/unit/storage.test.ts
+- [x] T031 [P] Add unit tests for settings manager in tests/unit/settings.test.ts
+- [x] T032 [P] Add unit tests for recent threads logic (add, update, eviction, workspace scoping) in tests/unit/recent-threads.test.ts
+- [x] T033 [P] Add unit tests for workspace detection in tests/unit/workspace.test.ts
+- [x] T034 Verify extension loads and all features work in both Chrome and Firefox (manual cross-browser testing per quickstart.md)
+- [x] T035 Add graceful degradation badge indicator on extension icon when DOM injection fails in src/entrypoints/background.ts
 
 ---
 
