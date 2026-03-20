@@ -21,7 +21,6 @@ describe('readSettings', () => {
   it('returns defaults when storage is empty', async () => {
     const settings = await readSettings();
     expect(settings.quickMessageActions).toBe(true);
-    expect(settings.recentThreads).toBe(true);
     expect(settings.manualThreadReadControl).toBe(true);
   });
 });
@@ -35,7 +34,7 @@ describe('writeSettings', () => {
     const result = await writeSettings({ quickMessageActions: false });
 
     expect(result.quickMessageActions).toBe(false);
-    expect(result.recentThreads).toBe(true);
+    expect(result.manualThreadReadControl).toBe(true);
   });
 });
 
@@ -45,8 +44,8 @@ describe('updateSetting', () => {
   });
 
   it('updates a single setting', async () => {
-    const result = await updateSetting('recentThreads', false);
-    expect(result.recentThreads).toBe(false);
+    const result = await updateSetting('manualThreadReadControl', false);
+    expect(result.manualThreadReadControl).toBe(false);
     expect(result.quickMessageActions).toBe(true);
   });
 });

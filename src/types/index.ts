@@ -1,25 +1,10 @@
 export interface ExtensionSettings {
   quickMessageActions: boolean;
-  recentThreads: boolean;
   manualThreadReadControl: boolean;
-}
-
-export interface ThreadEntry {
-  threadId: string;
-  workspaceId: string;
-  channelId: string;
-  channelName: string;
-  author: string;
-  messagePreview: string;
-  lastReplyAuthor?: string;
-  lastReplyPreview?: string;
-  lastViewedAt: number;
-  permalink: string;
 }
 
 export interface StorageSchema {
   settings: ExtensionSettings;
-  [key: `threads_${string}`]: ThreadEntry[];
 }
 
 export type MessageActionType = 'copy-link' | 'open-thread';

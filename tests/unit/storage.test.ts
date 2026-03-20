@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getSettings, setSettings, getThreads, setThreads } from '../../src/shared/storage';
-import type { ExtensionSettings, ThreadEntry } from '../../src/types';
+import { getSettings, setSettings } from '../../src/shared/storage';
+import type { ExtensionSettings } from '../../src/types';
 
 const store: Record<string, unknown> = {};
 
@@ -25,7 +25,6 @@ describe('getSettings', () => {
     const settings = await getSettings();
     expect(settings).toEqual({
       quickMessageActions: true,
-      recentThreads: true,
       manualThreadReadControl: true,
     });
   });
@@ -35,7 +34,6 @@ describe('getSettings', () => {
 
     const settings = await getSettings();
     expect(settings.quickMessageActions).toBe(false);
-    expect(settings.recentThreads).toBe(true);
   });
 });
 
@@ -47,40 +45,10 @@ describe('setSettings', () => {
   it('writes settings to storage', async () => {
     const settings: ExtensionSettings = {
       quickMessageActions: true,
-      recentThreads: false,
       manualThreadReadControl: true,
     };
 
     await setSettings(settings);
     expect(store['local:settings']).toEqual(settings);
-  });
-});
-
-describe('getThreads / setThreads', () => {
-  beforeEach(() => {
-    for (const key of Object.keys(store)) delete store[key];
-  });
-
-  it('returns empty array when no threads stored', async () => {
-    const threads = await getThreads('T0123');
-    expect(threads).toEqual([]);
-  });
-
-  it('stores and retrieves threads by workspace', async () => {
-    const threads: ThreadEntry[] = [
-      {
-        threadId: 'p123',
-        workspaceId: 'T0123',
-        channelId: 'C0123',
-        channelName: 'general',
-        author: 'User',
-        messagePreview: 'Hello',
-        lastViewedAt: Date.now(),
-        permalink: 'https://app.slack.com/archives/C0123/p123',
-      },
-    ];
-
-    await setThreads('T0123', threads);
-    expect(store['local:threads_T0123']).toEqual(threads);
   });
 });

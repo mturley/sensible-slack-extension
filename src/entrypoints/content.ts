@@ -4,7 +4,6 @@ import { SPA_HEALTH_CHECK_INTERVAL } from '../shared/constants';
 import { waitForElement } from '../shared/dom-utils';
 import type { ExtensionSettings } from '../types';
 import { initMessageActions, destroyMessageActions } from '../modules/message-actions';
-import { initRecentThreads, destroyRecentThreads } from '../modules/recent-threads';
 import { initManualReadControl, destroyManualReadControl } from '../modules/manual-read-control';
 import '../styles/content.css';
 
@@ -34,12 +33,6 @@ export default defineContentScript({
         initMessageActions(workspaceId);
       } else {
         destroyMessageActions();
-      }
-
-      if (settings.recentThreads) {
-        initRecentThreads(workspaceId);
-      } else {
-        destroyRecentThreads();
       }
 
       if (settings.manualThreadReadControl) {
