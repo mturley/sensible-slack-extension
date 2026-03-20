@@ -1,0 +1,83 @@
+/* Separate toolbar for our action buttons — not inside Slack's action bar */
+.se-toolbar {
+  display: none;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid rgba(128, 128, 128, 0.25);
+  border-radius: 6px;
+  background: #1a1d21;
+  position: absolute;
+  top: 32px;
+  right: 20px;
+  z-index: 100;
+}
+
+*:hover > .se-toolbar {
+  display: inline-flex;
+}
+
+.se-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  color: inherit;
+  padding: 0;
+  margin: 0;
+  line-height: 1;
+  opacity: 0.7;
+  transition: background-color 0.1s, opacity 0.1s;
+}
+
+.se-action-btn:hover {
+  background: rgba(128, 128, 128, 0.2);
+  opacity: 1;
+}
+
+.se-action-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.se-copied-feedback {
+  color: #2bac76 !important;
+  opacity: 1 !important;
+  font-size: 11px;
+  white-space: nowrap;
+  width: auto;
+  padding: 0 4px;
+}
+
+/* Mark as read button (US4) */
+.se-mark-read-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  margin-top: 4px;
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: background-color 0.1s, opacity 0.1s;
+}
+
+.se-mark-read-btn:hover {
+  background: rgba(128, 128, 128, 0.15);
+  opacity: 1;
+}
+
+.se-mark-read-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}

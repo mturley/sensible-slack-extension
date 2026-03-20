@@ -1,23 +1,21 @@
 import { querySelector, observeDOM } from '../shared/dom-utils';
-import { SELECTORS, SLACK_THREAD_URL_PATTERN } from '../shared/constants';
+import { SELECTORS } from '../shared/constants';
 
 let active = false;
 let disconnectObserver: (() => void) | null = null;
-let workspaceId = '';
+let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-const INJECTED_MARKER = 'data-se-actions-injected';
+const INJECTED_MARKER = 'data-se-actions';
 
 export function initMessageActions(wsId: string) {
   if (active) return;
   active = true;
-  workspaceId = wsId;
 
-  // Inject into existing messages
-  injectAllActionButtons();
+  injectAll();
 
-  // Watch for new messages rendered (virtual scrolling, SPA navigation)
-  disconnectObserver = observeDOM(document.body, (_mutations) => {
-    injectAllActionButtons();
+  disconnectObserver = observeDOM(document.body, () => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(injectAll, 150);
   });
 }
 
@@ -25,88 +23,168 @@ export function destroyMessageActions() {
   if (!active) return;
   active = false;
 
+  if (debounceTimer) {
+    clearTimeout(debounceTimer);
+    debounceTimer = null;
+  }
+
   if (disconnectObserver) {
     disconnectObserver();
     disconnectObserver = null;
   }
 
-  // Remove all injected buttons
+  document.querySelectorAll('.se-toolbar').forEach((el) => el.remove());
   document.querySelectorAll(`[${INJECTED_MARKER}]`).forEach((el) => {
-    el.querySelectorAll('.se-action-btn').forEach((btn) => btn.remove());
     el.removeAttribute(INJECTED_MARKER);
   });
 }
 
-function injectAllActionButtons() {
-  const actionBars = findActionBars();
-  for (const bar of actionBars) {
-    if (bar.hasAttribute(INJECTED_MARKER)) continue;
-    bar.setAttribute(INJECTED_MARKER, 'true');
-    injectButtons(bar);
-  }
-}
-
-function findActionBars(): Element[] {
-  const bars: Element[] = [];
-  for (const selector of SELECTORS.messageActionBar) {
+function injectAll() {
+  // Find all message containers and inject toolbar into any that don't have one yet
+  for (const selector of SELECTORS.messageContainer) {
     try {
-      const found = document.querySelectorAll(selector);
-      if (found.length > 0) {
-        bars.push(...Array.from(found));
-        break;
+      const messages = document.querySelectorAll(selector);
+      for (const msg of messages) {
+        if (msg.hasAttribute(INJECTED_MARKER)) continue;
+        msg.setAttribute(INJECTED_MARKER, 'true');
+        if (msg instanceof HTMLElement) {
+          msg.style.position = msg.style.position || 'relative';
+        }
+        attachToolbar(msg);
       }
+      if (messages.length > 0) break;
     } catch {
-      // Invalid selector — try next
+      // try next selector
     }
   }
-  return bars;
 }
 
-function injectButtons(actionBar: Element) {
-  const messageContainer = actionBar.closest('[data-qa="message_container"], [role="article"], [class*="c-message_kit"]');
-  if (!messageContainer) return;
-
+function attachToolbar(messageContainer: Element) {
   const permalink = extractPermalink(messageContainer);
 
-  // Copy link button
-  const copyBtn = createActionButton('📋', 'Copy link', async () => {
-    if (!permalink) return;
-    try {
-      await navigator.clipboard.writeText(permalink);
-      showCopiedFeedback(copyBtn);
-    } catch {
-      // Fallback: use execCommand
-      const textArea = document.createElement('textarea');
-      textArea.value = permalink;
-      textArea.style.position = 'fixed';
-      textArea.style.opacity = '0';
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
-      showCopiedFeedback(copyBtn);
+  const toolbar = document.createElement('div');
+  toolbar.className = 'se-toolbar';
+
+  const copyBtn = createButton(
+    '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4.5 2A1.5 1.5 0 0 0 3 3.5v9A1.5 1.5 0 0 0 4.5 14h5a1.5 1.5 0 0 0 1.5-1.5V6.621a1.5 1.5 0 0 0-.44-1.06L7.94 2.94A1.5 1.5 0 0 0 6.878 2.5H4.5zM6 3.5h-.5v2A1.5 1.5 0 0 0 7 7h2v5.5H4.5v-9H6z"/><path d="M12 5.5v7a2.5 2.5 0 0 1-2.5 2.5h-4A1.5 1.5 0 0 0 7 16h2.5A3.5 3.5 0 0 0 13 12.5v-6A1.5 1.5 0 0 0 12 5.5z"/></svg>',
+    'Copy link',
+    async () => {
+      const link = permalink ?? extractPermalink(messageContainer);
+      if (!link) return;
+      try {
+        await navigator.clipboard.writeText(link);
+      } catch {
+        const ta = document.createElement('textarea');
+        ta.value = link;
+        ta.style.cssText = 'position:fixed;opacity:0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      showFeedback(copyBtn, 'Copied!');
     }
-  });
+  );
 
-  // Open thread in new tab button
-  const threadBtn = createActionButton('↗️', 'Open thread in new tab', () => {
-    if (!permalink) return;
-    window.open(permalink, '_blank');
-  });
+  const threadBtn = createButton(
+    '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M9 2h5v5l-2-2-3 3-1.5-1.5L10.5 3.5 9 2zM3.5 4H7v1.5H3.5v7h7V9H12v4.5a1 1 0 0 1-1 1h-8a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1z"/></svg>',
+    'Open thread in new tab',
+    () => {
+      const link = permalink ?? extractPermalink(messageContainer);
+      if (link) window.open(link + '#se-open-thread', '_blank');
+    }
+  );
 
-  actionBar.appendChild(copyBtn);
-  actionBar.appendChild(threadBtn);
+  // Split view icon (two columns)
+  const splitBtn = createButton(
+    '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 3a1 1 0 0 1 1-1h4.5v12H3a1 1 0 0 1-1-1V3zm6.5-1H13a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H8.5V2z"/></svg>',
+    'Open in split view',
+    () => openInSplitView(messageContainer)
+  );
+
+  toolbar.appendChild(copyBtn);
+  toolbar.appendChild(threadBtn);
+  toolbar.appendChild(splitBtn);
+  messageContainer.appendChild(toolbar);
 }
 
-function createActionButton(
-  icon: string,
-  tooltip: string,
+async function openInSplitView(messageContainer: Element) {
+  // Step 1: Open the thread panel
+  // First, try clicking the reply bar (for messages with existing replies)
+  let clicked = false;
+  for (const selector of ['[data-qa="reply_bar_count"]', '[data-qa="reply_bar_view_thread"]', '[data-qa="reply_bar"]']) {
+    const btn = messageContainer.querySelector(selector);
+    if (btn instanceof HTMLElement) {
+      btn.click();
+      clicked = true;
+      break;
+    }
+  }
+
+  // If no reply bar, trigger the hover action bar with pointer events
+  if (!clicked) {
+    const hoverTarget =
+      messageContainer.querySelector('[class*="c-message_kit__hover"]') ?? messageContainer;
+    hoverTarget.dispatchEvent(new PointerEvent('pointerenter', { bubbles: true }));
+    hoverTarget.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+    hoverTarget.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+    hoverTarget.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    await sleep(400);
+
+    for (const selector of ['[data-qa="start_thread"]', '[data-qa="reply_in_thread"]', 'button[aria-label="View thread"]', 'button[aria-label="Reply in thread"]']) {
+      const btn = messageContainer.querySelector(selector);
+      if (btn instanceof HTMLElement) {
+        btn.click();
+        clicked = true;
+        break;
+      }
+    }
+  }
+
+  if (!clicked) return;
+
+  // Step 2: Wait for the thread panel to open
+  let threadPanel: Element | null = null;
+  const deadline = Date.now() + 5000;
+  while (!threadPanel && Date.now() < deadline) {
+    threadPanel = document.querySelector('[data-qa="threads_flexpane"]');
+    if (!threadPanel) await sleep(300);
+  }
+  if (!threadPanel) return;
+
+  // Step 3: Click the kebab/more menu in the flexpane header
+  await sleep(500);
+  const kebab = document.querySelector('[data-qa="secondary-header-more"]') as HTMLElement | null;
+  if (!kebab) return;
+  kebab.click();
+  await sleep(400);
+
+  // Step 4: Find and click "Open in split view" in the menu
+  const menuItems = document.querySelectorAll(
+    '[role="menuitem"], [role="option"], [data-qa="menu_item"]'
+  );
+  for (const item of menuItems) {
+    if ((item.textContent ?? '').toLowerCase().includes('split') && item instanceof HTMLElement) {
+      item.click();
+      return;
+    }
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function createButton(
+  svgHtml: string,
+  label: string,
   onClick: () => void
 ): HTMLButtonElement {
   const btn = document.createElement('button');
   btn.className = 'se-action-btn';
-  btn.innerHTML = `<span class="tooltip">${tooltip}</span>${icon}`;
-  btn.title = tooltip;
+  btn.title = label;
+  btn.setAttribute('aria-label', label);
+  btn.innerHTML = svgHtml;
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
     e.preventDefault();
@@ -115,40 +193,35 @@ function createActionButton(
   return btn;
 }
 
-function showCopiedFeedback(btn: HTMLButtonElement) {
-  const original = btn.textContent;
-  btn.textContent = '✓';
+function showFeedback(btn: HTMLButtonElement, text: string) {
+  const orig = btn.innerHTML;
+  btn.textContent = text;
   btn.classList.add('se-copied-feedback');
   setTimeout(() => {
-    btn.textContent = '';
-    btn.innerHTML = `<span class="tooltip">Copy link</span>📋`;
+    btn.innerHTML = orig;
     btn.classList.remove('se-copied-feedback');
-  }, 1500);
+  }, 1200);
 }
 
 function extractPermalink(messageContainer: Element): string | null {
-  // Try to find a timestamp link with the message permalink
   const timestampEl = querySelector(SELECTORS.messageTimestamp, messageContainer);
   if (timestampEl) {
     const href = timestampEl.getAttribute('href');
     if (href) {
-      // Convert relative URL to absolute
-      if (href.startsWith('/')) {
-        return `${window.location.origin}${href}`;
-      }
-      return href;
+      return href.startsWith('/') ? `${window.location.origin}${href}` : href;
     }
   }
 
-  // Try to extract from data attributes
-  const tsAttr = messageContainer.getAttribute('data-ts') ?? messageContainer.getAttribute('data-item-key');
+  const tsAttr =
+    messageContainer.getAttribute('data-ts') ??
+    messageContainer.getAttribute('data-item-key');
   if (tsAttr) {
-    // Construct permalink from workspace context
-    const channelMatch = window.location.pathname.match(/\/client\/[A-Z0-9]+\/([A-Z0-9]+)/);
+    const channelMatch = window.location.pathname.match(
+      /\/client\/[A-Z0-9]+\/([A-Z0-9]+)/
+    );
     if (channelMatch) {
-      const channelId = channelMatch[1];
       const ts = tsAttr.replace('.', '');
-      return `${window.location.origin}/archives/${channelId}/p${ts}`;
+      return `${window.location.origin}/archives/${channelMatch[1]}/p${ts}`;
     }
   }
 

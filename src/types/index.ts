@@ -1,5 +1,4 @@
 export interface ExtensionSettings {
-  redirectPrevention: boolean;
   quickMessageActions: boolean;
   recentThreads: boolean;
   manualThreadReadControl: boolean;

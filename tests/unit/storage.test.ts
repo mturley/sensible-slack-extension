@@ -24,7 +24,6 @@ describe('getSettings', () => {
   it('returns defaults when storage is empty', async () => {
     const settings = await getSettings();
     expect(settings).toEqual({
-      redirectPrevention: true,
       quickMessageActions: true,
       recentThreads: true,
       manualThreadReadControl: true,
@@ -32,11 +31,11 @@ describe('getSettings', () => {
   });
 
   it('merges stored values with defaults', async () => {
-    store['local:settings'] = { redirectPrevention: false };
+    store['local:settings'] = { quickMessageActions: false };
 
     const settings = await getSettings();
-    expect(settings.redirectPrevention).toBe(false);
-    expect(settings.quickMessageActions).toBe(true);
+    expect(settings.quickMessageActions).toBe(false);
+    expect(settings.recentThreads).toBe(true);
   });
 });
 
@@ -47,7 +46,6 @@ describe('setSettings', () => {
 
   it('writes settings to storage', async () => {
     const settings: ExtensionSettings = {
-      redirectPrevention: false,
       quickMessageActions: true,
       recentThreads: false,
       manualThreadReadControl: true,

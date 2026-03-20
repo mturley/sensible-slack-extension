@@ -13,7 +13,6 @@ export const SPA_HEALTH_CHECK_INTERVAL = 3000;
 
 // Default settings (all features enabled)
 export const DEFAULT_SETTINGS: ExtensionSettings = {
-  redirectPrevention: true,
   quickMessageActions: true,
   recentThreads: true,
   manualThreadReadControl: true,

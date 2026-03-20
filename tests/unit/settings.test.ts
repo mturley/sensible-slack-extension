@@ -20,7 +20,6 @@ describe('readSettings', () => {
 
   it('returns defaults when storage is empty', async () => {
     const settings = await readSettings();
-    expect(settings.redirectPrevention).toBe(true);
     expect(settings.quickMessageActions).toBe(true);
     expect(settings.recentThreads).toBe(true);
     expect(settings.manualThreadReadControl).toBe(true);
@@ -33,10 +32,10 @@ describe('writeSettings', () => {
   });
 
   it('merges partial settings with current values', async () => {
-    const result = await writeSettings({ redirectPrevention: false });
+    const result = await writeSettings({ quickMessageActions: false });
 
-    expect(result.redirectPrevention).toBe(false);
-    expect(result.quickMessageActions).toBe(true);
+    expect(result.quickMessageActions).toBe(false);
+    expect(result.recentThreads).toBe(true);
   });
 });
 
@@ -48,6 +47,6 @@ describe('updateSetting', () => {
   it('updates a single setting', async () => {
     const result = await updateSetting('recentThreads', false);
     expect(result.recentThreads).toBe(false);
-    expect(result.redirectPrevention).toBe(true);
+    expect(result.quickMessageActions).toBe(true);
   });
 });

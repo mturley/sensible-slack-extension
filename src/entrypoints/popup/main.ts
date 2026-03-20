@@ -3,7 +3,6 @@ import { getThreads } from '../../shared/storage';
 import type { ExtensionSettings, ThreadEntry } from '../../types';
 
 const TOGGLE_KEYS: (keyof ExtensionSettings)[] = [
-  'redirectPrevention',
   'quickMessageActions',
   'recentThreads',
   'manualThreadReadControl',
