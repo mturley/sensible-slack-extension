@@ -12,7 +12,7 @@ body {
 }
 
 .popup {
-  width: 320px;
+  width: 380px;
   padding: 16px;
 }
 
@@ -87,6 +87,26 @@ h2 {
 
 .toggle-slider {
   display: none;
+}
+
+.sub-toggles {
+  padding-left: 16px;
+  border-left: 2px solid #e0e0e0;
+  margin-left: 4px;
+}
+
+.sub-toggles.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.sub-toggle .toggle-label {
+  font-size: 13px;
+  color: #616061;
+}
+
+.sub-toggle {
+  padding: 4px 0;
 }
 
 /* Injected action button styles (used in content script) */

@@ -29,7 +29,7 @@ export default defineContentScript({
 
     function applyFeatures(settings: ExtensionSettings, workspaceId: string) {
       if (settings.quickMessageActions) {
-        initMessageActions(workspaceId);
+        initMessageActions(workspaceId, settings);
       } else {
         destroyMessageActions();
       }

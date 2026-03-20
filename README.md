@@ -1,23 +1,33 @@
 # Slack Enhancements
 
-A browser extension that adds quality-of-life improvements to the Slack web interface. Built with [WXT](https://wxt.dev/) for Chrome and Firefox.
+A browser extension that adds quality-of-life improvements to the Slack web interface. Built with [WXT](https://wxt.dev/) for Firefox (MV3).
 
 ## Features
 
+All features can be individually toggled from the extension popup.
+
 ### Quick Message Actions
 
-Adds two new buttons to the message hover action bar:
+Adds a secondary toolbar on message hover with shortcuts that are normally buried in menus:
 
-- **Copy link** — Copies a permalink to the message to your clipboard in one click (instead of digging through the "More actions" menu).
-- **Open thread in new tab** — Opens the message's thread in a new browser tab with the thread panel expanded.
+- **Copy link** — One-click permalink copy to clipboard.
+- **Open thread in new tab** — Opens the message's thread in a new tab with the thread panel automatically expanded.
+- **Open in split view** — Opens the thread's split view (the native Slack feature that's normally several clicks deep).
+- **Mark unread** — Marks the message as unread without right-clicking or opening a menu.
 
-### Recent Threads Tracking
+Each action can be individually enabled or disabled in the popup settings.
 
-Tracks threads you've opened and displays them in the extension popup, ordered by most recently viewed. Click any entry to navigate back to that thread. History is stored locally and scoped per workspace.
+### Manual Thread Read Control
 
-### Manual Thread Read Control *(planned)*
+Prevents the Threads page from automatically marking threads as read as you scroll past them. Instead:
 
-Prevents the Threads page from automatically marking threads as read when you scroll past them. Instead, a "Mark as read" button appears on each thread so you can dismiss them explicitly.
+- Automatic `subscriptions.thread.mark` API calls are intercepted at the XHR level and suppressed with fake success responses, so Slack doesn't retry.
+- A **"Mark as read"** button appears on each thread with unread messages, letting you explicitly dismiss them.
+- Threads viewed on other pages (channels, DMs) are still marked as read normally.
+
+#### How it works
+
+A content script running in the page's [MAIN world](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Content_scripts#main_world) wraps `XMLHttpRequest.prototype` before Slack's scripts load. When you're on the Threads page, mark-as-read requests are redirected to a blob URL returning `{"ok":true}`, preventing Slack from knowing the request was blocked. The intercepted request parameters (token, timestamps, URL) are captured and stored per-thread so they can be replayed exactly when you click "Mark as read".
 
 ## Pairing with a Redirect Blocker
 
@@ -31,7 +41,7 @@ Slack's web client often tries to redirect you to the desktop app when you open 
 ### Prerequisites
 
 - Node.js 18+ and npm
-- Chrome and/or Firefox
+- Firefox
 
 ### Development
 
@@ -39,26 +49,20 @@ Slack's web client often tries to redirect you to the desktop app when you open 
 npm install
 
 # Dev mode with hot reload
-npm run dev          # Chrome
-npm run dev:firefox  # Firefox
+npm run dev:firefox
 ```
 
-Then load the extension in your browser:
-
-- **Chrome**: Go to `chrome://extensions/`, enable Developer mode, click "Load unpacked", and select `.output/chrome-mv3`
-- **Firefox**: Go to `about:debugging#/runtime/this-firefox`, click "Load Temporary Add-on", and select the manifest.json in `.output/firefox-mv2`
+Then load the extension: go to `about:debugging#/runtime/this-firefox`, click "Load Temporary Add-on", and select the `manifest.json` in `.output/firefox-mv3`.
 
 ### Build
 
 ```bash
-npm run build          # All browsers
-npm run build:chrome   # Chrome only
-npm run build:firefox  # Firefox only
+npm run build:firefox
 ```
 
-### Test
+### Test & Lint
 
 ```bash
 npm test
-npm run test:watch
+npm run lint
 ```

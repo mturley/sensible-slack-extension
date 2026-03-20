@@ -1,16 +1,28 @@
 import { querySelector, observeDOM } from '../shared/dom-utils';
 import { SELECTORS } from '../shared/constants';
+import type { ExtensionSettings } from '../types';
 
 let active = false;
 let disconnectObserver: (() => void) | null = null;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+let currentSettings: ExtensionSettings | null = null;
 
 const INJECTED_MARKER = 'data-se-actions';
 
-export function initMessageActions(wsId: string) {
-  if (active) return;
-  active = true;
+export function initMessageActions(wsId: string, settings: ExtensionSettings) {
+  currentSettings = settings;
 
+  if (active) {
+    // Settings changed while already active — re-inject all toolbars
+    document.querySelectorAll('.se-toolbar').forEach((el) => el.remove());
+    document.querySelectorAll(`[${INJECTED_MARKER}]`).forEach((el) => {
+      el.removeAttribute(INJECTED_MARKER);
+    });
+    injectAll();
+    return;
+  }
+
+  active = true;
   injectAll();
 
   disconnectObserver = observeDOM(document.body, () => {
@@ -22,6 +34,7 @@ export function initMessageActions(wsId: string) {
 export function destroyMessageActions() {
   if (!active) return;
   active = false;
+  currentSettings = null;
 
   if (debounceTimer) {
     clearTimeout(debounceTimer);
@@ -61,64 +74,74 @@ function injectAll() {
 
 function attachToolbar(messageContainer: Element) {
   const permalink = extractPermalink(messageContainer);
+  const s = currentSettings;
 
   const toolbar = document.createElement('div');
   toolbar.className = 'se-toolbar';
 
-  const copyBtn = createButton(
-    '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4.5 2A1.5 1.5 0 0 0 3 3.5v9A1.5 1.5 0 0 0 4.5 14h5a1.5 1.5 0 0 0 1.5-1.5V6.621a1.5 1.5 0 0 0-.44-1.06L7.94 2.94A1.5 1.5 0 0 0 6.878 2.5H4.5zM6 3.5h-.5v2A1.5 1.5 0 0 0 7 7h2v5.5H4.5v-9H6z"/><path d="M12 5.5v7a2.5 2.5 0 0 1-2.5 2.5h-4A1.5 1.5 0 0 0 7 16h2.5A3.5 3.5 0 0 0 13 12.5v-6A1.5 1.5 0 0 0 12 5.5z"/></svg>',
-    'Copy link',
-    async () => {
-      const link = permalink ?? extractPermalink(messageContainer);
-      if (!link) return;
-      try {
-        await navigator.clipboard.writeText(link);
-      } catch {
-        const ta = document.createElement('textarea');
-        ta.value = link;
-        ta.style.cssText = 'position:fixed;opacity:0';
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
+  if (!s || s.quickActionCopyLink) {
+    const copyBtn = createButton(
+      '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4.5 2A1.5 1.5 0 0 0 3 3.5v9A1.5 1.5 0 0 0 4.5 14h5a1.5 1.5 0 0 0 1.5-1.5V6.621a1.5 1.5 0 0 0-.44-1.06L7.94 2.94A1.5 1.5 0 0 0 6.878 2.5H4.5zM6 3.5h-.5v2A1.5 1.5 0 0 0 7 7h2v5.5H4.5v-9H6z"/><path d="M12 5.5v7a2.5 2.5 0 0 1-2.5 2.5h-4A1.5 1.5 0 0 0 7 16h2.5A3.5 3.5 0 0 0 13 12.5v-6A1.5 1.5 0 0 0 12 5.5z"/></svg>',
+      'Copy link',
+      async () => {
+        const link = permalink ?? extractPermalink(messageContainer);
+        if (!link) return;
+        try {
+          await navigator.clipboard.writeText(link);
+        } catch {
+          const ta = document.createElement('textarea');
+          ta.value = link;
+          ta.style.cssText = 'position:fixed;opacity:0';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+        }
+        showFeedback(copyBtn, 'Copied!');
       }
-      showFeedback(copyBtn, 'Copied!');
-    }
-  );
+    );
+    toolbar.appendChild(copyBtn);
+  }
 
-  const threadBtn = createButton(
-    '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M9 2h5v5l-2-2-3 3-1.5-1.5L10.5 3.5 9 2zM3.5 4H7v1.5H3.5v7h7V9H12v4.5a1 1 0 0 1-1 1h-8a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1z"/></svg>',
-    'Open thread in new tab',
-    () => {
-      const link = permalink ?? extractPermalink(messageContainer);
-      if (!link) return;
-      const tsMatch = link.match(/\/p(\d+)/);
-      if (!tsMatch) return;
-      const rawTs = tsMatch[1];
-      const dataTs = rawTs.length > 6
-        ? `${rawTs.slice(0, -6)}.${rawTs.slice(-6)}`
-        : rawTs;
-      browser.runtime.sendMessage({ type: 'OPEN_THREAD_TAB', url: link, ts: dataTs });
-    }
-  );
+  if (!s || s.quickActionOpenThread) {
+    const threadBtn = createButton(
+      '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M9 2h5v5l-2-2-3 3-1.5-1.5L10.5 3.5 9 2zM3.5 4H7v1.5H3.5v7h7V9H12v4.5a1 1 0 0 1-1 1h-8a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1z"/></svg>',
+      'Open thread in new tab',
+      () => {
+        const link = permalink ?? extractPermalink(messageContainer);
+        if (!link) return;
+        const tsMatch = link.match(/\/p(\d+)/);
+        if (!tsMatch) return;
+        const rawTs = tsMatch[1];
+        const dataTs = rawTs.length > 6
+          ? `${rawTs.slice(0, -6)}.${rawTs.slice(-6)}`
+          : rawTs;
+        browser.runtime.sendMessage({ type: 'OPEN_THREAD_TAB', url: link, ts: dataTs });
+      }
+    );
+    toolbar.appendChild(threadBtn);
+  }
 
-  // Split view icon (two columns)
-  const splitBtn = createButton(
-    '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 3a1 1 0 0 1 1-1h4.5v12H3a1 1 0 0 1-1-1V3zm6.5-1H13a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H8.5V2z"/></svg>',
-    'Open in split view',
-    () => openInSplitView(messageContainer)
-  );
+  if (!s || s.quickActionSplitView) {
+    const splitBtn = createButton(
+      '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 3a1 1 0 0 1 1-1h4.5v12H3a1 1 0 0 1-1-1V3zm6.5-1H13a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H8.5V2z"/></svg>',
+      'Open in split view',
+      () => openInSplitView(messageContainer)
+    );
+    toolbar.appendChild(splitBtn);
+  }
 
-  const unreadBtn = createButton(
-    '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a6 6 0 0 0-6 6 6 6 0 0 0 6 6 6 6 0 0 0 6-6 6 6 0 0 0-6-6zm0 1.5a4.5 4.5 0 0 1 4.5 4.5A4.5 4.5 0 0 1 8 12.5 4.5 4.5 0 0 1 3.5 8 4.5 4.5 0 0 1 8 3.5z"/><circle cx="8" cy="8" r="2.5"/></svg>',
-    'Mark unread',
-    () => markUnread(messageContainer)
-  );
+  if (!s || s.quickActionMarkUnread) {
+    const unreadBtn = createButton(
+      '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a6 6 0 0 0-6 6 6 6 0 0 0 6 6 6 6 0 0 0 6-6 6 6 0 0 0-6-6zm0 1.5a4.5 4.5 0 0 1 4.5 4.5A4.5 4.5 0 0 1 8 12.5 4.5 4.5 0 0 1 3.5 8 4.5 4.5 0 0 1 8 3.5z"/><circle cx="8" cy="8" r="2.5"/></svg>',
+      'Mark unread',
+      () => markUnread(messageContainer)
+    );
+    toolbar.appendChild(unreadBtn);
+  }
 
-  toolbar.appendChild(copyBtn);
-  toolbar.appendChild(threadBtn);
-  toolbar.appendChild(splitBtn);
-  toolbar.appendChild(unreadBtn);
+  // Don't append an empty toolbar
+  if (toolbar.children.length === 0) return;
 
   // Append inside the hover target so hovering our toolbar doesn't trigger mouseleave on it
   const hoverTarget = messageContainer.querySelector('[class*="c-message_kit__hover"]');
