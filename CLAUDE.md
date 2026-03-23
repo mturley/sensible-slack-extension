@@ -1,4 +1,4 @@
-# slack-enhancements-extension Development Guidelines
+# sensible-slack-extension Development Guidelines
 
 Auto-generated from all feature plans. Last updated: 2026-03-19
 

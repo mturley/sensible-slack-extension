@@ -1,6 +1,6 @@
 {
-  "name": "slack-enhancements-extension",
-  "version": "0.1.5",
+  "name": "sensible-slack-extension",
+  "version": "0.1.0",
   "description": "Browser extension that enhances the Slack web interface",
   "private": true,
   "type": "module",

@@ -16,7 +16,7 @@
   Follow-up TODOs: None
 -->
 
-# Slack Enhancements Extension Constitution
+# Sensible Slack Extension Constitution
 
 ## Core Principles
 

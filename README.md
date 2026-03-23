@@ -1,4 +1,4 @@
-# Slack Enhancements
+# Sensible Slack
 
 A browser extension that adds quality-of-life improvements to the Slack web interface. The primary feature is preventing the Threads view from automatically marking messages as read. Built with [WXT](https://wxt.dev/) for Chrome and Firefox (MV3).
 
