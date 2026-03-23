@@ -82,4 +82,5 @@ npx web-ext sign \
   --source-dir=.output/firefox-mv3 \
   --channel="$channel" \
   --api-key="$WEB_EXT_API_KEY" \
-  --api-secret="$WEB_EXT_API_SECRET"
+  --api-secret="$WEB_EXT_API_SECRET" \
+  --amo-metadata="amo-metadata.json"
