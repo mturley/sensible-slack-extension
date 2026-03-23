@@ -10,6 +10,9 @@ let interceptListener: ((e: Event) => void) | null = null;
 let capturedToken: { token: string; url: string } | null = null;
 // Store the full blocked request params per thread (channel-threadTs -> params)
 const blockedRequests = new Map<string, { token: string; url: string; channel: string; thread_ts: string; ts: string }>();
+// Track threads that have been observed with unread messages, so we don't lose
+// track when the virtual list recycles the "New" divider element on scroll.
+const seenUnreadThreads = new Set<string>();
 
 export function initManualReadControl() {
   if (active) return;
@@ -73,7 +76,10 @@ function checkNavigation() {
     injectMarkReadButtons();
     if (!wasOnThreadsPage) {
       blockedCount = 0;
+      seenUnreadThreads.clear();
     }
+  } else {
+    seenUnreadThreads.clear();
   }
 
   wasOnThreadsPage = onThreadsPage;
@@ -117,6 +123,7 @@ export function destroyManualReadControl() {
   blockedCount = 0;
   capturedToken = null;
   blockedRequests.clear();
+  seenUnreadThreads.clear();
 
   document.querySelectorAll('.se-toast').forEach((el) => el.remove());
   document.querySelectorAll('.se-mark-read-btn').forEach((btn) => btn.remove());
@@ -160,33 +167,39 @@ function getLatestMessageTs(channel: string, threadTs: string): string {
 }
 
 function injectMarkReadButtons() {
-  const headings = document.querySelectorAll('[data-qa="threads_view_header"]');
+  // Scan all visible virtual-list items to discover threads and track unread state.
+  // The heading and "New" divider may scroll out of the virtual list, so we remember
+  // which threads had unread messages and can inject the button when the footer appears.
+  const allItems = document.querySelectorAll('[data-qa="virtual-list-item"]');
+  const threadSuffix = /threads_view(?:_heading|_footer)?-([A-Z0-9]+)-([^-]+)/;
 
-  for (const heading of headings) {
-    const listItem = heading.closest('[data-qa="virtual-list-item"]');
-    if (!listItem) continue;
+  // First pass: scan for unread dividers in currently visible items
+  for (const item of allItems) {
+    if (item.querySelector('[data-qa="thread-marked-as-read-divider"]')) {
+      const id = item.getAttribute('id') ?? '';
+      // Extract channel-threadTs from any threads_view item ID
+      const m = id.match(/([A-Z0-9]+)-([\d.]+)/);
+      if (m) {
+        seenUnreadThreads.add(`${m[1]}-${m[2]}`);
+      }
+    }
+  }
 
-    const itemId = listItem.getAttribute('id') ?? '';
-    const match = itemId.match(/heading-([A-Z0-9]+)-(.+)/);
+  // Second pass: find footer items and inject buttons for known-unread threads
+  for (const item of allItems) {
+    const id = item.getAttribute('id') ?? '';
+    if (!id.includes('footer')) continue;
+
+    const match = id.match(threadSuffix);
     if (!match) continue;
 
     const channel = match[1];
     const threadTs = match[2];
+    const threadKey = `${channel}-${threadTs}`;
 
-    // Only show button for threads with unread messages (those with a "New" divider)
-    const threadItems = getThreadListItems(channel, threadTs);
-    const hasUnread = threadItems.some(
-      (item) => item.querySelector('[data-qa="thread-marked-as-read-divider"]') !== null
-    );
-    if (!hasUnread) continue;
+    if (!seenUnreadThreads.has(threadKey)) continue;
 
-    // Button before the reply box (footer)
-    const footerItem = threadItems.find(
-      (item) => (item.getAttribute('id') ?? '').includes('footer')
-    );
-    if (!footerItem) continue;
-
-    const replyContainer = footerItem.querySelector('[data-qa="reply_container"]');
+    const replyContainer = item.querySelector('[data-qa="reply_container"]');
     if (!replyContainer) continue;
 
     // Skip if already has a button
@@ -199,7 +212,6 @@ function injectMarkReadButtons() {
       btn.disabled = true;
       btn.textContent = 'Marking\u2026';
 
-      const threadKey = `${channel}-${threadTs}`;
       const blocked = blockedRequests.get(threadKey);
 
       if (!blocked) {
@@ -253,6 +265,7 @@ function replayMarkAsRead(
       return;
     }
     btn.textContent = 'Marked';
+    seenUnreadThreads.delete(`${params.channel}-${params.thread_ts}`);
 
     // Hide the "New" divider line within this thread
     const items = getThreadListItems(params.channel, params.thread_ts);
