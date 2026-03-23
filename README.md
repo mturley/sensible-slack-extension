@@ -6,7 +6,7 @@ A browser extension that adds quality-of-life improvements to the Slack web inte
 
 All features can be individually toggled from the extension popup.
 
-![Toggle menu](docs/screenshots/toggle-menu.png)to
+![Toggle menu](docs/screenshots/toggle-menu.png)
 
 ### Manual Thread Read Control
 
@@ -82,3 +82,11 @@ npm run build:firefox
 npm test
 npm run lint
 ```
+
+## Disclaimer
+
+This extension was vibe-coded with [Claude Code](https://claude.ai/code). Use at your own risk.
+
+## License
+
+[CC0 1.0](LICENSE) — Public domain.
