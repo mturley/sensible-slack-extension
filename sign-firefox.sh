@@ -27,13 +27,15 @@ IFS='.' read -r major minor patch <<< "$current_version"
 
 echo ""
 echo "How would you like to bump the version?"
+echo "  0) no bump / retry ($current_version)"
 echo "  1) patch ($major.$minor.$((patch + 1)))"
 echo "  2) minor ($major.$((minor + 1)).0)"
 echo "  3) major ($((major + 1)).0.0)"
 echo ""
-read -rp "Choose [1/2/3]: " bump_choice
+read -rp "Choose [0/1/2/3]: " bump_choice
 
 case "$bump_choice" in
+  0) new_version="$current_version" ;;
   1) new_version="$major.$minor.$((patch + 1))" ;;
   2) new_version="$major.$((minor + 1)).0" ;;
   3) new_version="$((major + 1)).0.0" ;;
@@ -43,12 +45,12 @@ case "$bump_choice" in
     ;;
 esac
 
-echo "New version: $new_version"
-
-# Update version in package.json
-npm version "$new_version" --no-git-tag-version
-
-echo "Updated package.json to version $new_version"
+if [[ "$new_version" != "$current_version" ]]; then
+  npm version "$new_version" --no-git-tag-version
+  echo "Updated package.json to version $new_version"
+else
+  echo "Keeping version $current_version (retry)"
+fi
 
 # Build for Firefox
 echo ""
