@@ -1,6 +1,6 @@
 # Slack Enhancements
 
-A browser extension that adds quality-of-life improvements to the Slack web interface. Built with [WXT](https://wxt.dev/) for Firefox (MV3).
+A browser extension that adds quality-of-life improvements to the Slack web interface. The primary feature is preventing the Threads view from automatically marking messages as read. Built with [WXT](https://wxt.dev/) for Chrome and Firefox (MV3).
 
 ## Features
 
@@ -47,22 +47,32 @@ Slack's web client often tries to redirect you to the desktop app when you open 
 ### Prerequisites
 
 - Node.js 18+ and npm
-- Firefox
+- Chrome and/or Firefox
 
 ### Development
 
 ```bash
 npm install
 
-# Dev mode with hot reload
+# Dev mode with hot reload (Chrome)
+npm run dev
+
+# Dev mode with hot reload (Firefox)
 npm run dev:firefox
 ```
 
-Then load the extension: go to `about:debugging#/runtime/this-firefox`, click "Load Temporary Add-on", and select the `manifest.json` in `.output/firefox-mv3`.
+Then load the extension in your browser:
+
+- **Chrome**: go to `chrome://extensions`, enable "Developer mode", click "Load unpacked", and select the `.output/chrome-mv3` directory.
+- **Firefox**: go to `about:debugging#/runtime/this-firefox`, click "Load Temporary Add-on", and select the `manifest.json` in `.output/firefox-mv3`.
 
 ### Build
 
 ```bash
+# Chrome
+npm run build:chrome
+
+# Firefox
 npm run build:firefox
 ```
 
