@@ -24,25 +24,37 @@
         </label>
 
         <div class="sub-toggles" id="sub-toggles-quickMessageActions">
-          <label class="toggle-row sub-toggle">
-            <span class="toggle-label">Copy link</span>
+          <label class="checkbox-row">
             <input type="checkbox" id="toggle-quickActionCopyLink" />
-            <span class="toggle-slider"></span>
+            <span class="checkbox-label">Copy link</span>
           </label>
-          <label class="toggle-row sub-toggle">
-            <span class="toggle-label">Open thread in new tab</span>
+          <label class="checkbox-row">
             <input type="checkbox" id="toggle-quickActionOpenThread" />
-            <span class="toggle-slider"></span>
+            <span class="checkbox-label">Open thread in new tab</span>
           </label>
-          <label class="toggle-row sub-toggle">
-            <span class="toggle-label">Open in split view</span>
+          <label class="checkbox-row">
             <input type="checkbox" id="toggle-quickActionSplitView" />
-            <span class="toggle-slider"></span>
+            <span class="checkbox-label">Open in split view</span>
           </label>
-          <label class="toggle-row sub-toggle">
-            <span class="toggle-label">Mark unread</span>
+          <label class="checkbox-row">
             <input type="checkbox" id="toggle-quickActionMarkUnread" />
-            <span class="toggle-slider"></span>
+            <span class="checkbox-label">Mark unread</span>
+          </label>
+        </div>
+        <label class="toggle-row">
+          <span class="toggle-label">Auto-format pasted links</span>
+          <input type="checkbox" id="toggle-autoFormatLinks" />
+          <span class="toggle-slider"></span>
+        </label>
+
+        <div class="sub-toggles" id="sub-toggles-autoFormatLinks">
+          <label class="checkbox-row">
+            <input type="checkbox" id="toggle-autoFormatGithubLinks" />
+            <span class="checkbox-label">GitHub PR/issue links</span>
+          </label>
+          <label class="checkbox-row">
+            <input type="checkbox" id="toggle-autoFormatJiraLinks" />
+            <span class="checkbox-label">Jira issue links</span>
           </label>
         </div>
       </div>

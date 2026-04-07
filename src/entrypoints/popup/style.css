@@ -126,6 +126,25 @@ h2 {
   padding: 4px 0;
 }
 
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox-row input[type="checkbox"] {
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.checkbox-label {
+  font-size: 13px;
+  color: #616061;
+}
+
 /* Injected action button styles (used in content script) */
 .se-action-btn {
   display: inline-flex;

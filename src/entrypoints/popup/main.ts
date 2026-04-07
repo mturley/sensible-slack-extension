@@ -8,6 +8,9 @@ const TOGGLE_KEYS: (keyof ExtensionSettings)[] = [
   'quickActionSplitView',
   'quickActionMarkUnread',
   'manualThreadReadControl',
+  'autoFormatLinks',
+  'autoFormatGithubLinks',
+  'autoFormatJiraLinks',
 ];
 
 const SUB_TOGGLE_PARENTS: Partial<Record<keyof ExtensionSettings, keyof ExtensionSettings>> = {
@@ -15,6 +18,8 @@ const SUB_TOGGLE_PARENTS: Partial<Record<keyof ExtensionSettings, keyof Extensio
   quickActionOpenThread: 'quickMessageActions',
   quickActionSplitView: 'quickMessageActions',
   quickActionMarkUnread: 'quickMessageActions',
+  autoFormatGithubLinks: 'autoFormatLinks',
+  autoFormatJiraLinks: 'autoFormatLinks',
 };
 
 function updateSubToggleState(settings: ExtensionSettings) {

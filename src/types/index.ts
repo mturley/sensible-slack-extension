@@ -5,6 +5,9 @@ export interface ExtensionSettings {
   quickActionSplitView: boolean;
   quickActionMarkUnread: boolean;
   manualThreadReadControl: boolean;
+  autoFormatLinks: boolean;
+  autoFormatGithubLinks: boolean;
+  autoFormatJiraLinks: boolean;
 }
 
 export interface StorageSchema {

@@ -81,7 +81,7 @@ function attachToolbar(messageContainer: Element) {
 
   if (!s || s.quickActionCopyLink) {
     const copyBtn = createButton(
-      '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4.5 2A1.5 1.5 0 0 0 3 3.5v9A1.5 1.5 0 0 0 4.5 14h5a1.5 1.5 0 0 0 1.5-1.5V6.621a1.5 1.5 0 0 0-.44-1.06L7.94 2.94A1.5 1.5 0 0 0 6.878 2.5H4.5zM6 3.5h-.5v2A1.5 1.5 0 0 0 7 7h2v5.5H4.5v-9H6z"/><path d="M12 5.5v7a2.5 2.5 0 0 1-2.5 2.5h-4A1.5 1.5 0 0 0 7 16h2.5A3.5 3.5 0 0 0 13 12.5v-6A1.5 1.5 0 0 0 12 5.5z"/></svg>',
+      '<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.306 3.756a2.75 2.75 0 0 1 3.889 0l.05.05a2.75 2.75 0 0 1 0 3.889l-3.18 3.18a2.75 2.75 0 0 1-3.98-.095l-.03-.034a.75.75 0 0 0-1.11 1.009l.03.034a4.25 4.25 0 0 0 6.15.146l3.18-3.18a4.25 4.25 0 0 0 0-6.01l-.05-.05a4.25 4.25 0 0 0-6.01 0L9.47 4.47a.75.75 0 1 0 1.06 1.06zm-4.611 12.49a2.75 2.75 0 0 1-3.89 0l-.05-.051a2.75 2.75 0 0 1 0-3.89l3.18-3.179a2.75 2.75 0 0 1 3.98.095l.03.034a.75.75 0 1 0 1.11-1.01l-.03-.033a4.25 4.25 0 0 0-6.15-.146l-3.18 3.18a4.25 4.25 0 0 0 0 6.01l.05.05a4.25 4.25 0 0 0 6.01 0l1.775-1.775a.75.75 0 0 0-1.06-1.06z" clip-rule="evenodd"/></svg>',
       'Copy link',
       async () => {
         const link = permalink ?? extractPermalink(messageContainer);
@@ -122,9 +122,11 @@ function attachToolbar(messageContainer: Element) {
     toolbar.appendChild(threadBtn);
   }
 
-  if (!s || s.quickActionSplitView) {
+  const isInThread = !!messageContainer.closest('[data-qa="threads_flexpane"], [data-qa="message_pane_flexpane"]');
+
+  if ((!s || s.quickActionSplitView) && !isInThread) {
     const splitBtn = createButton(
-      '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M2 3a1 1 0 0 1 1-1h4.5v12H3a1 1 0 0 1-1-1V3zm6.5-1H13a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H8.5V2z"/></svg>',
+      '<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10.264 1.044c2.103 0 4.143.921 5.075 2.622V2.323a.75.75 0 0 1 1.5 0V5.5a.75.75 0 0 1-.75.75h-3.177a.75.75 0 0 1 0-1.5h1.274c-.487-1.293-1.988-2.206-3.922-2.206-2.169 0-3.787 1.177-4.02 3.049a.75.75 0 0 1-1.488-.186c.353-2.835 2.818-4.363 5.508-4.363M9.43 9.356A1.63 1.63 0 0 0 8.41 9H7.306l-4.762 4.762v2.105q0 .174.035.338zM4.177 9h1.715l-3.348 3.348v-1.715C2.544 9.73 3.275 9 4.177 9m5.812 1.21-6.887 6.886c.287.252.663.404 1.075.404H5.2l4.844-4.844v-2.023q-.001-.22-.055-.423m.055 3.86-3.43 3.43h1.797c.902 0 1.633-.731 1.633-1.633zm1.5 1.797A3.133 3.133 0 0 1 8.411 19H4.177a3.133 3.133 0 0 1-3.133-3.133v-5.234A3.133 3.133 0 0 1 4.177 7.5H8.41a3.133 3.133 0 0 1 3.133 3.133zm5.956-5.234C17.5 9.73 16.769 9 15.867 9h-.234C14.73 9 14 9.73 14 10.633v5.234c0 .902.731 1.633 1.633 1.633h.234c.902 0 1.633-.731 1.633-1.633zm1.5 5.234A3.133 3.133 0 0 1 15.867 19h-.234a3.133 3.133 0 0 1-3.133-3.133v-5.234A3.133 3.133 0 0 1 15.633 7.5h.234A3.133 3.133 0 0 1 19 10.633z" clip-rule="evenodd"/></svg>',
       'Open in split view',
       () => openInSplitView(messageContainer)
     );
@@ -133,7 +135,7 @@ function attachToolbar(messageContainer: Element) {
 
   if (!s || s.quickActionMarkUnread) {
     const unreadBtn = createButton(
-      '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a6 6 0 0 0-6 6 6 6 0 0 0 6 6 6 6 0 0 0 6-6 6 6 0 0 0-6-6zm0 1.5a4.5 4.5 0 0 1 4.5 4.5A4.5 4.5 0 0 1 8 12.5 4.5 4.5 0 0 1 3.5 8 4.5 4.5 0 0 1 8 3.5z"/><circle cx="8" cy="8" r="2.5"/></svg>',
+      '<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M13.964 4.05a2 2 0 1 1 0 4 2 2 0 0 1 0-4m-3.5 2a3.5 3.5 0 1 0 7 0 3.5 3.5 0 0 0-7 0M2.536 4.905V15.2a2.25 2.25 0 0 0 2.25 2.25h10.357a2.25 2.25 0 0 0 2.25-2.25v-4.35a.75.75 0 0 0-1.5 0v4.35a.75.75 0 0 1-.75.75H4.786a.75.75 0 0 1-.75-.75V4.905a.75.75 0 0 1 .749-.75h4.42a.75.75 0 1 0 0-1.5h-4.42a2.25 2.25 0 0 0-2.25 2.25" clip-rule="evenodd"/></svg>',
       'Mark unread',
       () => markUnread(messageContainer)
     );

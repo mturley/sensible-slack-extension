@@ -14,6 +14,9 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   quickActionSplitView: true,
   quickActionMarkUnread: true,
   manualThreadReadControl: true,
+  autoFormatLinks: true,
+  autoFormatGithubLinks: true,
+  autoFormatJiraLinks: true,
 };
 
 // Slack DOM selectors (priority: data-qa > aria > class)
@@ -38,6 +41,10 @@ export const SELECTORS = {
 // URL patterns
 export const SLACK_WORKSPACE_URL_PATTERN = /^https:\/\/app\.slack\.com\/client\/([A-Z0-9]+)/;
 export const SLACK_SUBDOMAIN_PATTERN = /^https:\/\/([^.]+)\.slack\.com/;
+// Link formatting patterns
+export const GITHUB_PR_ISSUE_URL_PATTERN = /^https:\/\/github\.com\/[^/]+\/([^/]+)\/(?:pull|issues)\/(\d+)\/?$/;
+export const JIRA_ISSUE_URL_PATTERN = /^https:\/\/[^/]+\.atlassian\.net\/browse\/([A-Z][A-Z0-9]+-\d+)\/?$/;
+
 // Extension badge
 export const BADGE_DEGRADED = '!';
 export const BADGE_COLOR_DEGRADED = '#FF9800';

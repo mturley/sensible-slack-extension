@@ -54,6 +54,9 @@ describe('setSettings', () => {
       quickActionSplitView: true,
       quickActionMarkUnread: true,
       manualThreadReadControl: true,
+      autoFormatLinks: true,
+      autoFormatGithubLinks: true,
+      autoFormatJiraLinks: true,
     };
 
     await setSettings(settings);

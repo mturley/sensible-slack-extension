@@ -4,6 +4,7 @@ import { SPA_HEALTH_CHECK_INTERVAL } from '../shared/constants';
 import type { ExtensionSettings } from '../types';
 import { initMessageActions, destroyMessageActions } from '../modules/message-actions';
 import { initManualReadControl, destroyManualReadControl } from '../modules/manual-read-control';
+import { initLinkFormatter, destroyLinkFormatter } from '../modules/link-formatter';
 import '../styles/content.css';
 
 export default defineContentScript({
@@ -38,6 +39,12 @@ export default defineContentScript({
         initManualReadControl();
       } else {
         destroyManualReadControl();
+      }
+
+      if (settings.autoFormatLinks) {
+        initLinkFormatter(settings);
+      } else {
+        destroyLinkFormatter();
       }
     }
 
