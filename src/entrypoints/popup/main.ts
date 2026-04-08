@@ -3,6 +3,7 @@ import type { ExtensionSettings } from '../../types';
 
 const TOGGLE_KEYS: (keyof ExtensionSettings)[] = [
   'quickMessageActions',
+  'quickActionEditMessage',
   'quickActionCopyLink',
   'quickActionOpenThread',
   'quickActionSplitView',
@@ -14,6 +15,7 @@ const TOGGLE_KEYS: (keyof ExtensionSettings)[] = [
 ];
 
 const SUB_TOGGLE_PARENTS: Partial<Record<keyof ExtensionSettings, keyof ExtensionSettings>> = {
+  quickActionEditMessage: 'quickMessageActions',
   quickActionCopyLink: 'quickMessageActions',
   quickActionOpenThread: 'quickMessageActions',
   quickActionSplitView: 'quickMessageActions',

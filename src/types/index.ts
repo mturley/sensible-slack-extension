@@ -1,5 +1,6 @@
 export interface ExtensionSettings {
   quickMessageActions: boolean;
+  quickActionEditMessage: boolean;
   quickActionCopyLink: boolean;
   quickActionOpenThread: boolean;
   quickActionSplitView: boolean;

@@ -9,6 +9,7 @@ export const SPA_HEALTH_CHECK_INTERVAL = 3000;
 // Default settings (all features enabled)
 export const DEFAULT_SETTINGS: ExtensionSettings = {
   quickMessageActions: true,
+  quickActionEditMessage: true,
   quickActionCopyLink: true,
   quickActionOpenThread: true,
   quickActionSplitView: true,

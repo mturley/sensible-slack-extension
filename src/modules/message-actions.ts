@@ -6,6 +6,7 @@ let active = false;
 let disconnectObserver: (() => void) | null = null;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let currentSettings: ExtensionSettings | null = null;
+let cachedUserId: string | null = null;
 
 const INJECTED_MARKER = 'data-se-actions';
 
@@ -35,6 +36,7 @@ export function destroyMessageActions() {
   if (!active) return;
   active = false;
   currentSettings = null;
+  cachedUserId = null;
 
   if (debounceTimer) {
     clearTimeout(debounceTimer);
@@ -72,12 +74,66 @@ function injectAll() {
   }
 }
 
+function detectCurrentUserId(): string | null {
+  // Read Slack's localConfig_v2 from the page's localStorage.
+  // Firefox content scripts need wrappedJSObject to access the page's localStorage.
+  try {
+    const pageWindow = (window as unknown as { wrappedJSObject?: Window }).wrappedJSObject ?? window;
+    const raw = pageWindow.localStorage.getItem('localConfig_v2');
+    if (raw) {
+      const config = JSON.parse(raw) as {
+        teams?: Record<string, { id?: string; user_id?: string; enterprise_id?: string }>;
+      };
+      if (config.teams) {
+        // The URL is app.slack.com/client/<TEAM_OR_ENTERPRISE_ID>/...
+        // Match against the team's id or enterprise_id from localConfig_v2.
+        const urlMatch = window.location.pathname.match(/^\/client\/([A-Z0-9]+)/);
+        const wsId = urlMatch?.[1];
+        if (wsId) {
+          for (const team of Object.values(config.teams)) {
+            if ((team.id === wsId || team.enterprise_id === wsId) && team.user_id) {
+              return team.user_id;
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[SE] detectCurrentUserId error:', e);
+  }
+
+  return null;
+}
+
+function isOwnMessage(messageContainer: Element): boolean {
+  const senderEl = messageContainer.querySelector('[data-message-sender]');
+  if (!senderEl) return false;
+  const senderId = senderEl.getAttribute('data-message-sender');
+  if (!senderId) return false;
+
+  if (!cachedUserId) {
+    cachedUserId = detectCurrentUserId();
+  }
+
+  return !!cachedUserId && senderId === cachedUserId;
+}
+
 function attachToolbar(messageContainer: Element) {
   const permalink = extractPermalink(messageContainer);
   const s = currentSettings;
+  const ownMessage = isOwnMessage(messageContainer);
 
   const toolbar = document.createElement('div');
   toolbar.className = 'se-toolbar';
+
+  if (ownMessage && (!s || s.quickActionEditMessage)) {
+    const editBtn = createButton(
+      '<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M13.616 3.445a1.25 1.25 0 0 1 1.768 0l1.171 1.171a1.25 1.25 0 0 1 0 1.768L15.5 7.44 12.56 4.5zM11.5 5.56l-7.079 7.08-1.101 4.04 4.04-1.1 7.079-7.08zm4.945-3.177a2.75 2.75 0 0 0-3.89 0L3.22 11.72a.75.75 0 0 0-.194.333l-1.5 5.5a.75.75 0 0 0 .921.92l5.5-1.5a.75.75 0 0 0 .333-.192l9.336-9.336a2.75 2.75 0 0 0 0-3.89z" clip-rule="evenodd"/></svg>',
+      'Edit message',
+      () => editMessage(messageContainer)
+    );
+    toolbar.appendChild(editBtn);
+  }
 
   if (!s || s.quickActionCopyLink) {
     const copyBtn = createButton(
@@ -147,7 +203,12 @@ function attachToolbar(messageContainer: Element) {
 
   // Append inside the hover target so hovering our toolbar doesn't trigger mouseleave on it
   const hoverTarget = messageContainer.querySelector('[class*="c-message_kit__hover"]');
-  (hoverTarget ?? messageContainer).appendChild(toolbar);
+  const appendTarget = (hoverTarget ?? messageContainer) as HTMLElement;
+  // Ensure the append target is a positioning ancestor for our absolute-positioned toolbar
+  if (!appendTarget.style.position) {
+    appendTarget.style.position = 'relative';
+  }
+  appendTarget.appendChild(toolbar);
 }
 
 async function openInSplitView(messageContainer: Element) {
@@ -233,6 +294,35 @@ async function markUnread(messageContainer: Element) {
     2000
   );
   if (unreadItem) unreadItem.click();
+}
+
+async function editMessage(messageContainer: Element) {
+  // Click the "More actions" (kebab) button — already visible since we're hovering the message
+  const moreSelectors = [
+    '[data-qa="more_message_actions"]',
+    'button[aria-label="More actions"]',
+    'button[aria-label="More message actions"]',
+  ];
+  const searchRoot = messageContainer.parentElement ?? messageContainer;
+  const moreBtn = await waitForSelector(searchRoot, moreSelectors, 2000);
+  if (!moreBtn) return;
+  moreBtn.click();
+
+  // Poll for "Edit message" menu item
+  const editItem = await waitForMatch(
+    () => {
+      for (const item of document.querySelectorAll(
+        '[role="menuitem"], [role="option"], [data-qa="menu_item"], [data-qa="edit_message"]'
+      )) {
+        if ((item.textContent ?? '').toLowerCase().includes('edit message') && item instanceof HTMLElement) {
+          return item;
+        }
+      }
+      return null;
+    },
+    2000
+  );
+  if (editItem) editItem.click();
 }
 
 function waitForSelector(root: Element, selectors: string[], timeout: number): Promise<HTMLElement | null> {

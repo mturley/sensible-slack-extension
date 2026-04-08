@@ -25,11 +25,15 @@ describe('getSettings', () => {
     const settings = await getSettings();
     expect(settings).toEqual({
       quickMessageActions: true,
+      quickActionEditMessage: true,
       quickActionCopyLink: true,
       quickActionOpenThread: true,
       quickActionSplitView: true,
       quickActionMarkUnread: true,
       manualThreadReadControl: true,
+      autoFormatLinks: true,
+      autoFormatGithubLinks: true,
+      autoFormatJiraLinks: true,
     });
   });
 
@@ -49,6 +53,7 @@ describe('setSettings', () => {
   it('writes settings to storage', async () => {
     const settings: ExtensionSettings = {
       quickMessageActions: true,
+      quickActionEditMessage: true,
       quickActionCopyLink: true,
       quickActionOpenThread: true,
       quickActionSplitView: true,
