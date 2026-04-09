@@ -201,14 +201,17 @@ function attachToolbar(messageContainer: Element) {
   // Don't append an empty toolbar
   if (toolbar.children.length === 0) return;
 
-  // Append inside the hover target so hovering our toolbar doesn't trigger mouseleave on it
-  const hoverTarget = messageContainer.querySelector('[class*="c-message_kit__hover"]');
-  const appendTarget = (hoverTarget ?? messageContainer) as HTMLElement;
-  // Ensure the append target is a positioning ancestor for our absolute-positioned toolbar
-  if (!appendTarget.style.position) {
-    appendTarget.style.position = 'relative';
-  }
-  appendTarget.appendChild(toolbar);
+  // Append to the message container (which has position: relative) so the
+  // toolbar positions from a consistent right edge.
+  messageContainer.appendChild(toolbar);
+
+  // Dynamically position our toolbar just below Slack's native action bar,
+  // which only exists in the DOM during hover and varies in position by
+  // message type.
+  const container = messageContainer as HTMLElement;
+  container.addEventListener('mouseenter', () => {
+    positionToolbarBelowNativeBar(container, toolbar);
+  });
 }
 
 async function openInSplitView(messageContainer: Element) {
@@ -348,6 +351,40 @@ function waitForMatch<T>(finder: () => T | null, timeout: number): Promise<T | n
       }
     }, 30);
   });
+}
+
+function positionToolbarBelowNativeBar(container: HTMLElement, toolbar: HTMLDivElement) {
+  // Slack's native action bar appears asynchronously on hover.
+  // Poll briefly to find it, then position our toolbar just below it.
+  const DEFAULT_TOP = 25;
+  let attempts = 0;
+  const poll = setInterval(() => {
+    attempts++;
+    // Target the message action bar specifically — NOT file action bars
+    // (e.g. image overlays) which also match class-based selectors.
+    const nativeBar = container.querySelector<HTMLElement>(
+      '[data-qa="message-actions"], [data-qa="message_actions"]'
+    );
+    if (nativeBar) {
+      clearInterval(poll);
+      // Use offsetTop to walk from the native bar up to our container,
+      // accumulating the offset. This is more reliable than getBoundingClientRect
+      // because it measures within the layout, unaffected by scroll position.
+      let offsetFromContainer = nativeBar.offsetHeight;
+      let el: HTMLElement | null = nativeBar;
+      while (el && el !== container) {
+        offsetFromContainer += el.offsetTop;
+        el = el.offsetParent as HTMLElement | null;
+      }
+      // Only apply if we successfully walked up to our container
+      if (el === container) {
+        toolbar.style.top = `${offsetFromContainer + 2}px`;
+      }
+    } else if (attempts > 20) {
+      clearInterval(poll);
+      toolbar.style.top = `${DEFAULT_TOP}px`;
+    }
+  }, 15);
 }
 
 function sleep(ms: number): Promise<void> {
