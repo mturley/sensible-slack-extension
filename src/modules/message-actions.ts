@@ -271,14 +271,10 @@ async function openInSplitView(messageContainer: Element) {
 }
 
 async function markUnread(messageContainer: Element) {
-  // Click the "More actions" (kebab) button — already visible since we're hovering the message
-  const moreSelectors = [
-    '[data-qa="more_message_actions"]',
-    'button[aria-label="More actions"]',
-    'button[aria-label="More message actions"]',
-  ];
-  const searchRoot = messageContainer.parentElement ?? messageContainer;
-  const moreBtn = await waitForSelector(searchRoot, moreSelectors, 2000);
+  // Click the "More actions" (kebab) button — already visible since we're hovering the message.
+  // Scope the search to the message's own native action bar to avoid clicking
+  // a kebab menu inside an embedded message preview / attachment.
+  const moreBtn = await findMessageKebab(messageContainer);
   if (!moreBtn) return;
   moreBtn.click();
 
@@ -299,15 +295,51 @@ async function markUnread(messageContainer: Element) {
   if (unreadItem) unreadItem.click();
 }
 
-async function editMessage(messageContainer: Element) {
-  // Click the "More actions" (kebab) button — already visible since we're hovering the message
+/**
+ * Find the kebab ("More actions") button for a message, scoped to the message's
+ * own native action bar so we don't accidentally click a kebab inside an
+ * embedded message preview or attachment.
+ */
+async function findMessageKebab(messageContainer: Element): Promise<HTMLElement | null> {
+  const searchRoot = messageContainer.parentElement ?? messageContainer;
+
+  // First, try to find the kebab inside the message's native action bar.
+  // The action bar is visible because the user is hovering the message.
+  const actionBar = await waitForSelector(searchRoot, [
+    '[data-qa="message-actions"]',
+    '[data-qa="message_actions"]',
+  ], 2000);
+
+  if (actionBar) {
+    const kebab = actionBar.querySelector<HTMLElement>(
+      '[data-qa="more_message_actions"], button[aria-label="More actions"], button[aria-label="More message actions"]'
+    );
+    if (kebab) return kebab;
+  }
+
+  // Fallback: search from the message container but exclude buttons inside
+  // attachments/embeds which have their own action bars.
   const moreSelectors = [
     '[data-qa="more_message_actions"]',
     'button[aria-label="More actions"]',
     'button[aria-label="More message actions"]',
   ];
-  const searchRoot = messageContainer.parentElement ?? messageContainer;
-  const moreBtn = await waitForSelector(searchRoot, moreSelectors, 2000);
+  for (const sel of moreSelectors) {
+    for (const el of searchRoot.querySelectorAll<HTMLElement>(sel)) {
+      if (!el.closest('[data-qa="message_attachment"], [data-qa="attachment"], .c-message_attachment')) {
+        return el;
+      }
+    }
+  }
+
+  return null;
+}
+
+async function editMessage(messageContainer: Element) {
+  // Click the "More actions" (kebab) button — already visible since we're hovering the message.
+  // Scope the search to the message's own native action bar to avoid clicking
+  // a kebab menu inside an embedded message preview / attachment.
+  const moreBtn = await findMessageKebab(messageContainer);
   if (!moreBtn) return;
   moreBtn.click();
 
