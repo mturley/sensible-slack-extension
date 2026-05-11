@@ -52,6 +52,10 @@ export function mergeLinks(
       if (link.authorName && !prev.authorName) prev.authorName = link.authorName;
       if (link.channelName && !prev.channelName) prev.channelName = link.channelName;
       if (link.messagePreview && !prev.messagePreview) prev.messagePreview = link.messagePreview;
+      if (link.sourceMsgTs && (!prev.sourceMsgTs || link.sourceMsgTs > prev.sourceMsgTs)) {
+        prev.sourceMsgTs = link.sourceMsgTs;
+        if (link.sourceChannelId) prev.sourceChannelId = link.sourceChannelId;
+      }
     } else {
       byUrl.set(link.url, link);
     }

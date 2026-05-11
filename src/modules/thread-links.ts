@@ -513,11 +513,15 @@ function extractLinksFromMessage(msgEl: Element): CachedLink[] {
 
   const unfurls = collectUnfurls(msgEl);
   const now = Date.now();
+  const msgTs = msgEl.getAttribute('data-msg-ts') ?? undefined;
+  const msgChannelId = msgEl.getAttribute('data-msg-channel-id') ?? undefined;
 
   return contentLinks.map(({ url, text }) => {
     const link: CachedLink = {
       url,
       domain: extractDomain(url),
+      sourceMsgTs: msgTs,
+      sourceChannelId: msgChannelId,
       firstSeenAt: now,
     };
 
@@ -830,6 +834,8 @@ function attachDropdown(dropdown: HTMLElement) {
   }, 0);
 }
 
+const SCROLL_TO_SVG = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="10" r="6"/><line x1="10" y1="2" x2="10" y2="5"/><line x1="10" y1="15" x2="10" y2="18"/><line x1="2" y1="10" x2="5" y2="10"/><line x1="15" y1="10" x2="18" y2="10"/><circle cx="10" cy="10" r="1.5" fill="currentColor" stroke="none"/></svg>';
+
 const COPY_LINK_SVG = '<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.306 3.756a2.75 2.75 0 0 1 3.889 0l.05.05a2.75 2.75 0 0 1 0 3.889l-3.18 3.18a2.75 2.75 0 0 1-3.98-.095l-.03-.034a.75.75 0 0 0-1.11 1.009l.03.034a4.25 4.25 0 0 0 6.15.146l3.18-3.18a4.25 4.25 0 0 0 0-6.01l-.05-.05a4.25 4.25 0 0 0-6.01 0L9.47 4.47a.75.75 0 1 0 1.06 1.06zm-4.611 12.49a2.75 2.75 0 0 1-3.89 0l-.05-.051a2.75 2.75 0 0 1 0-3.89l3.18-3.179a2.75 2.75 0 0 1 3.98.095l.03.034a.75.75 0 1 0 1.11-1.01l-.03-.033a4.25 4.25 0 0 0-6.15-.146l-3.18 3.18a4.25 4.25 0 0 0 0 6.01l.05.05a4.25 4.25 0 0 0 6.01 0l1.775-1.775a.75.75 0 0 0-1.06-1.06z" clip-rule="evenodd"/></svg>';
 
 function createCopyButton(url: string): HTMLButtonElement {
@@ -854,11 +860,118 @@ function createCopyButton(url: string): HTMLButtonElement {
   return btn;
 }
 
+function scrollToMessageInFlexpane(msgTs: string) {
+  const flexpane = document.querySelector('[data-qa="threads_flexpane"]');
+  if (!flexpane) return;
+
+  const scrollEl = flexpane.querySelector('[data-qa="slack_kit_scrollbar"]');
+  if (!scrollEl) return;
+
+  const existing = flexpane.querySelector(`[data-msg-ts="${msgTs}"]`);
+  if (existing) {
+    existing.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    highlightMessage(existing);
+    return;
+  }
+
+  let attempts = 0;
+  const maxAttempts = 50;
+  const scrollStep = scrollEl.clientHeight * 0.7;
+  let direction = -1;
+  let hitTop = false;
+
+  const tryScroll = () => {
+    const found = flexpane.querySelector(`[data-msg-ts="${msgTs}"]`);
+    if (found) {
+      found.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      highlightMessage(found);
+      return;
+    }
+    if (++attempts > maxAttempts) return;
+
+    if (!hitTop && scrollEl.scrollTop <= 0) {
+      hitTop = true;
+      direction = 1;
+    }
+    scrollEl.scrollTop += direction * scrollStep;
+    setTimeout(tryScroll, 250);
+  };
+
+  scrollEl.scrollTop += direction * scrollStep;
+  setTimeout(tryScroll, 250);
+}
+
+function highlightMessage(el: Element) {
+  el.classList.add('se-highlight-message');
+  setTimeout(() => el.classList.remove('se-highlight-message'), 2000);
+}
+
+function openThreadAndScrollTo(threadId: string, msgTs: string) {
+  const droppableKey = threadId.replace(':', '-');
+  const threadItems = document.querySelectorAll(`[data-droppable-thread="${droppableKey}"]`);
+
+  const parts = threadId.split(':');
+  const rootTs = parts.length >= 2 ? parts[1] : null;
+
+  for (const item of threadItems) {
+    const msg = item.querySelector('[data-qa="message_container"]');
+    if (msg && msg.getAttribute('data-msg-ts') === rootTs) continue;
+    const timestamp = item.querySelector('.c-timestamp');
+    if (timestamp instanceof HTMLElement) {
+      timestamp.click();
+      waitForFlexpaneAndScroll(msgTs);
+      return;
+    }
+  }
+}
+
+function waitForFlexpaneAndScroll(msgTs: string) {
+  let checks = 0;
+  const poll = () => {
+    const flexpane = document.querySelector('[data-qa="threads_flexpane"]');
+    if (flexpane) {
+      const waitForMessages = () => {
+        const msgs = flexpane.querySelectorAll('[data-qa="message_container"]');
+        if (msgs.length > 1) {
+          setTimeout(() => scrollToMessageInFlexpane(msgTs), 300);
+          return;
+        }
+        if (++checks < 60) setTimeout(waitForMessages, 200);
+      };
+      waitForMessages();
+      return;
+    }
+    if (++checks < 60) setTimeout(poll, 200);
+  };
+  setTimeout(poll, 200);
+}
+
+function createGoToMessageButton(link: CachedLink, threadId: string, isFlexpane: boolean): HTMLButtonElement | null {
+  if (!link.sourceMsgTs) return null;
+  const btn = document.createElement('button');
+  btn.className = 'se-link-goto-btn';
+  btn.type = 'button';
+  btn.title = 'Scroll to message';
+  btn.innerHTML = SCROLL_TO_SVG;
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    closeDropdownIfOpen();
+    if (isFlexpane) {
+      scrollToMessageInFlexpane(link.sourceMsgTs!);
+    } else {
+      openThreadAndScrollTo(threadId, link.sourceMsgTs!);
+    }
+  });
+  return btn;
+}
+
 function showExternalLinksDropdown(
-  _threadId: string,
+  threadId: string,
   links: CachedLink[],
   headerEl: Element
 ) {
+  const isFlexpane = !!headerEl.closest('[data-qa="threads_flexpane"]') || !!headerEl.closest('.p-flexpane_header__primary');
   const dropdown = document.createElement('div');
   dropdown.className = DROPDOWN_CLASS;
 
@@ -926,6 +1039,8 @@ function showExternalLinksDropdown(
       }
 
       itemEl.appendChild(linkEl);
+      const gotoBtn = createGoToMessageButton(link, threadId, isFlexpane);
+      if (gotoBtn) itemEl.appendChild(gotoBtn);
       itemEl.appendChild(createCopyButton(link.url));
 
       groupEl.appendChild(itemEl);
@@ -945,10 +1060,11 @@ function showExternalLinksDropdown(
 }
 
 function showLinkedThreadsDropdown(
-  _threadId: string,
+  threadId: string,
   links: CachedLink[],
   headerEl: Element
 ) {
+  const isFlexpane = !!headerEl.closest('[data-qa="threads_flexpane"]') || !!headerEl.closest('.p-flexpane_header__primary');
   const dropdown = document.createElement('div');
   dropdown.className = DROPDOWN_CLASS;
 
@@ -995,6 +1111,8 @@ function showLinkedThreadsDropdown(
     }
 
     itemEl.appendChild(linkEl);
+    const gotoBtn = createGoToMessageButton(link, threadId, isFlexpane);
+    if (gotoBtn) itemEl.appendChild(gotoBtn);
     itemEl.appendChild(createCopyButton(link.url));
 
     dropdown.appendChild(itemEl);

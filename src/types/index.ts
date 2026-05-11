@@ -27,6 +27,8 @@ export interface CachedLink {
   channelName?: string;
   messagePreview?: string;
   threadId?: string;
+  sourceMsgTs?: string;
+  sourceChannelId?: string;
   firstSeenAt: number;
 }
 
