@@ -352,7 +352,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
+  min-width: 28px;
   height: 28px;
   margin-right: 8px;
   border: none;
@@ -360,6 +360,7 @@
   background: transparent;
   color: rgba(209, 210, 211, 0.5);
   cursor: pointer;
+  white-space: nowrap;
   opacity: 0;
   transition: opacity 0.1s, background-color 0.1s;
 }

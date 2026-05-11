@@ -15,6 +15,7 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let currentSettings: ExtensionSettings | null = null;
 const processedMessages = new Map<string, Set<string>>();
 let openDropdown: HTMLElement | null = null;
+let openDropdownTrigger: HTMLElement | null = null;
 let closeDropdownHandler: ((e: MouseEvent | KeyboardEvent) => void) | null = null;
 let threadsPageScrollHandler: (() => void) | null = null;
 let threadsPageScrollEl: Element | null = null;
@@ -367,7 +368,7 @@ function updateFloatingButtons() {
           if (hasLinks) {
             btn.addEventListener('click', (e) => {
               e.stopPropagation();
-              if (openDropdown) { closeDropdownIfOpen(); } else { showExternalLinksDropdown(activeThreadId!, externalLinks, floatingContainer!); }
+              if (openDropdown && openDropdownTrigger === btn) { closeDropdownIfOpen(); } else { closeDropdownIfOpen(); openDropdownTrigger = btn; showExternalLinksDropdown(activeThreadId!, externalLinks, floatingContainer!); }
             });
           }
           floatingContainer.appendChild(btn);
@@ -385,7 +386,7 @@ function updateFloatingButtons() {
           if (hasLinks) {
             btn.addEventListener('click', (e) => {
               e.stopPropagation();
-              if (openDropdown) { closeDropdownIfOpen(); } else { showLinkedThreadsDropdown(activeThreadId!, threadLinks, floatingContainer!); }
+              if (openDropdown && openDropdownTrigger === btn) { closeDropdownIfOpen(); } else { closeDropdownIfOpen(); openDropdownTrigger = btn; showLinkedThreadsDropdown(activeThreadId!, threadLinks, floatingContainer!); }
             });
           }
           floatingContainer.appendChild(btn);
@@ -786,9 +787,11 @@ function renderOrUpdateButton(
   btn.disabled = !enabled;
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
-    if (openDropdown) {
+    if (openDropdown && openDropdownTrigger === btn) {
       closeDropdownIfOpen();
     } else {
+      closeDropdownIfOpen();
+      openDropdownTrigger = btn;
       onClick();
     }
   });
@@ -802,6 +805,7 @@ function closeDropdownIfOpen() {
   if (openDropdown) {
     openDropdown.remove();
     openDropdown = null;
+    openDropdownTrigger = null;
   }
   if (closeDropdownHandler) {
     document.removeEventListener('click', closeDropdownHandler);
