@@ -79,19 +79,16 @@ async function updateCacheStats() {
 
 function initPurgeButton() {
   const purgeBtn = document.getElementById('purge-btn');
-  const timeframeSelect = document.getElementById('purge-timeframe') as HTMLSelectElement | null;
-  if (!purgeBtn || !timeframeSelect) return;
+  if (!purgeBtn) return;
 
   purgeBtn.addEventListener('click', async () => {
-    const val = timeframeSelect.value;
-    const olderThan = val === 'all' ? 'all' : parseInt(val, 10);
     purgeBtn.textContent = 'Purging…';
     purgeBtn.setAttribute('disabled', '');
     try {
-      await purgeCache(olderThan);
+      await purgeCache('all');
       await updateCacheStats();
     } finally {
-      purgeBtn.textContent = 'Purge';
+      purgeBtn.textContent = 'Purge all cached links';
       purgeBtn.removeAttribute('disabled');
     }
   });

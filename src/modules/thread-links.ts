@@ -47,9 +47,18 @@ export function initThreadLinks(_wsId: string, settings: ExtensionSettings) {
   active = true;
   scanAll();
 
-  disconnectObserver = observeDOM(document.body, (_mutations) => {
+  disconnectObserver = observeDOM(document.body, (mutations) => {
+    let dominated = false;
+    for (const m of mutations) {
+      if (m.type !== 'childList') continue;
+      const t = m.target as Element;
+      if (t.closest?.('.c-virtual_list__scroll_container')) continue;
+      dominated = true;
+      break;
+    }
+    if (!dominated) return;
     if (debounceTimer) clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(scanAll, 500);
+    debounceTimer = setTimeout(scanAll, 200);
   });
 }
 
@@ -250,7 +259,7 @@ function setupThreadsPageScroll(threadsView: Element) {
     scrollScanTimer = setTimeout(() => {
       const tv = document.querySelector('[data-qa="threads_view"]');
       if (tv) scanThreadsPage(tv);
-    }, 300);
+    }, 150);
   };
   scrollEl.addEventListener('scroll', threadsPageScrollHandler, { passive: true });
   updateFloatingButtons();
