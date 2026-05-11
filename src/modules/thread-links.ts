@@ -826,18 +826,21 @@ function attachDropdown(dropdown: HTMLElement) {
   }, 0);
 }
 
+const COPY_LINK_SVG = '<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.306 3.756a2.75 2.75 0 0 1 3.889 0l.05.05a2.75 2.75 0 0 1 0 3.889l-3.18 3.18a2.75 2.75 0 0 1-3.98-.095l-.03-.034a.75.75 0 0 0-1.11 1.009l.03.034a4.25 4.25 0 0 0 6.15.146l3.18-3.18a4.25 4.25 0 0 0 0-6.01l-.05-.05a4.25 4.25 0 0 0-6.01 0L9.47 4.47a.75.75 0 1 0 1.06 1.06zm-4.611 12.49a2.75 2.75 0 0 1-3.89 0l-.05-.051a2.75 2.75 0 0 1 0-3.89l3.18-3.179a2.75 2.75 0 0 1 3.98.095l.03.034a.75.75 0 1 0 1.11-1.01l-.03-.033a4.25 4.25 0 0 0-6.15-.146l-3.18 3.18a4.25 4.25 0 0 0 0 6.01l.05.05a4.25 4.25 0 0 0 6.01 0l1.775-1.775a.75.75 0 0 0-1.06-1.06z" clip-rule="evenodd"/></svg>';
+const CHECK_SVG = '<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 0 1 0 1.414l-8 8a1 1 0 0 1-1.414 0l-4-4a1 1 0 0 1 1.414-1.414L8 12.586l7.293-7.293a1 1 0 0 1 1.414 0z" clip-rule="evenodd"/></svg>';
+
 function createCopyButton(url: string): HTMLButtonElement {
   const btn = document.createElement('button');
   btn.className = 'se-link-copy-btn';
   btn.type = 'button';
   btn.title = 'Copy link';
-  btn.textContent = '🔗';
+  btn.innerHTML = COPY_LINK_SVG;
   btn.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
     navigator.clipboard.writeText(url).then(() => {
-      btn.textContent = '✓';
-      setTimeout(() => { btn.textContent = '🔗'; }, 1500);
+      btn.innerHTML = CHECK_SVG;
+      setTimeout(() => { btn.innerHTML = COPY_LINK_SVG; }, 1500);
     });
   });
   return btn;

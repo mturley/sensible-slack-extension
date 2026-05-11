@@ -235,7 +235,11 @@
 }
 
 .se-link-group + .se-link-group {
-  border-top: 1px solid rgba(128, 128, 128, 0.15);
+  border-top: 2px solid rgba(128, 128, 128, 0.25);
+}
+
+.se-link-item + .se-link-item {
+  border-top: 1px solid rgba(128, 128, 128, 0.1);
 }
 
 .se-link-group-header {
@@ -355,7 +359,6 @@
   border-radius: 4px;
   background: transparent;
   color: rgba(209, 210, 211, 0.5);
-  font-size: 13px;
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.1s, background-color 0.1s;
@@ -364,6 +367,11 @@
 .se-link-item:hover .se-link-copy-btn,
 .se-linked-thread-item:hover .se-link-copy-btn {
   opacity: 1;
+}
+
+.se-link-copy-btn svg {
+  width: 14px;
+  height: 14px;
 }
 
 .se-link-copy-btn:hover {
