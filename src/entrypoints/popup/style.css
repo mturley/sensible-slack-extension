@@ -216,3 +216,59 @@ h2 {
   opacity: 0.5;
   cursor: default;
 }
+
+/* Cache management */
+.cache-management {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.cache-stats {
+  font-size: 12px;
+  color: #616061;
+  margin-bottom: 8px;
+}
+
+.purge-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.purge-label {
+  font-size: 12px;
+  color: #616061;
+  white-space: nowrap;
+}
+
+.purge-select {
+  flex: 1;
+  padding: 4px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 12px;
+  background: #fff;
+  color: #1d1c1d;
+}
+
+.purge-btn {
+  padding: 4px 12px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+  color: #616061;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.1s, color 0.1s;
+}
+
+.purge-btn:hover {
+  background: #f0f0f0;
+  color: #1d1c1d;
+}
+
+.purge-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

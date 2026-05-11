@@ -79,6 +79,32 @@ export default defineBackground(() => {
           }
           break;
         }
+        case 'FETCH_GITHUB_PR': {
+          const { owner, repo, prNumber } = message as {
+            type: string;
+            owner: string;
+            repo: string;
+            prNumber: string;
+          };
+          fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}`, {
+            headers: { Accept: 'application/vnd.github.v3+json' },
+          })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => {
+              if (data) {
+                sendResponse({
+                  title: data.title,
+                  author: data.user?.login,
+                  state: data.state,
+                  merged: data.merged,
+                });
+              } else {
+                sendResponse(null);
+              }
+            })
+            .catch(() => sendResponse(null));
+          return true;
+        }
       }
       return false;
     }

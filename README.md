@@ -1,6 +1,6 @@
 # Sensible Slack
 
-A browser extension that adds quality-of-life improvements to the Slack web interface. The primary feature is preventing the Threads view from automatically marking messages as read. Built with [WXT](https://wxt.dev/) for Chrome and Firefox (MV3).
+A browser extension that adds quality-of-life improvements to the Slack web interface, including manual thread read control, quick message actions, and thread link dropdowns that surface external links and linked threads from long conversations. Built with [WXT](https://wxt.dev/) for Chrome and Firefox (MV3).
 
 ## Features
 
@@ -30,6 +30,32 @@ Adds a secondary toolbar on message hover with shortcuts that are normally burie
 Each action can be individually enabled or disabled in the popup settings.
 
 ![Quick message actions](docs/screenshots/quick-message-actions.png)
+
+### Thread External Links Dropdown
+
+Surfaces all external links shared in a thread via a button in the thread header. Works in both the thread sidebar panel and the Threads page.
+
+- A **"N external links"** button appears in the thread header showing how many unique external URLs have been shared.
+- Clicking the button opens a dropdown with links grouped by domain, with Jira and GitHub links prioritized at the top.
+- Rich metadata (page title, description, favicon) is captured from Slack's link previews when available. Links without previews show smart display names (e.g. `repo#123` for GitHub PRs, `PROJ-123` for Jira issues).
+- Links are cached in extension storage so they persist across page reloads and are available immediately when you reopen a thread.
+- On the Threads page, when you scroll past a thread's header, the button floats in the top-right corner so it stays accessible while you read.
+- New links are detected as you scroll through long threads with lazy-loaded messages.
+
+### Thread Linked Threads Dropdown
+
+Surfaces links to other Slack threads that appear in the current thread.
+
+- A **"N linked threads"** button appears alongside the external links button.
+- Clicking opens a dropdown showing each linked thread with its channel name, author, and a message preview (when available from Slack's unfurl).
+- Threads are deduplicated and sorted most-recent-first.
+
+### Link Cache Management
+
+Both thread link features share a persistent cache managed from the extension popup:
+
+- The popup shows how many links are cached across how many threads.
+- A **purge** control lets you clear cached links older than 1 day, 7 days, 30 days, or all time.
 
 #### How it works
 
@@ -69,10 +95,13 @@ Then load the extension in your browser:
 ### Build
 
 ```bash
-# Chrome
+# Both browsers
+npm run build
+
+# Chrome only
 npm run build:chrome
 
-# Firefox
+# Firefox only
 npm run build:firefox
 ```
 

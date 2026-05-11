@@ -34,6 +34,8 @@ describe('getSettings', () => {
       autoFormatLinks: true,
       autoFormatGithubLinks: true,
       autoFormatJiraLinks: true,
+      threadExternalLinks: true,
+      threadLinkedThreads: true,
     });
   });
 
@@ -62,6 +64,8 @@ describe('setSettings', () => {
       autoFormatLinks: true,
       autoFormatGithubLinks: true,
       autoFormatJiraLinks: true,
+      threadExternalLinks: true,
+      threadLinkedThreads: true,
     };
 
     await setSettings(settings);

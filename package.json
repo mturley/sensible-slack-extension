@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "wxt",
     "dev:firefox": "wxt --browser firefox",
-    "build": "wxt build",
+    "build": "wxt build && wxt build --browser firefox",
     "build:chrome": "wxt build",
     "build:firefox": "wxt build --browser firefox",
     "zip": "wxt zip",

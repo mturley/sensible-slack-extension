@@ -1,4 +1,5 @@
 import { readSettings, updateSetting, onSettingsChange } from '../../shared/settings';
+import { getCacheStats, purgeCache, onCacheIndexChange } from '../../shared/link-cache';
 import type { ExtensionSettings } from '../../types';
 
 const TOGGLE_KEYS: (keyof ExtensionSettings)[] = [
@@ -12,6 +13,8 @@ const TOGGLE_KEYS: (keyof ExtensionSettings)[] = [
   'autoFormatLinks',
   'autoFormatGithubLinks',
   'autoFormatJiraLinks',
+  'threadExternalLinks',
+  'threadLinkedThreads',
 ];
 
 const SUB_TOGGLE_PARENTS: Partial<Record<keyof ExtensionSettings, keyof ExtensionSettings>> = {
@@ -59,4 +62,45 @@ async function initPopup() {
   });
 }
 
+async function updateCacheStats() {
+  const statsEl = document.getElementById('cache-stats');
+  if (!statsEl) return;
+  try {
+    const stats = await getCacheStats();
+    if (stats.linkCount === 0) {
+      statsEl.textContent = '0 links cached';
+    } else {
+      statsEl.textContent = `${stats.linkCount} link${stats.linkCount === 1 ? '' : 's'} cached across ${stats.threadCount} thread${stats.threadCount === 1 ? '' : 's'}`;
+    }
+  } catch {
+    statsEl.textContent = '0 links cached';
+  }
+}
+
+function initPurgeButton() {
+  const purgeBtn = document.getElementById('purge-btn');
+  const timeframeSelect = document.getElementById('purge-timeframe') as HTMLSelectElement | null;
+  if (!purgeBtn || !timeframeSelect) return;
+
+  purgeBtn.addEventListener('click', async () => {
+    const val = timeframeSelect.value;
+    const olderThan = val === 'all' ? 'all' : parseInt(val, 10);
+    purgeBtn.textContent = 'Purging…';
+    purgeBtn.setAttribute('disabled', '');
+    try {
+      await purgeCache(olderThan);
+      await updateCacheStats();
+    } finally {
+      purgeBtn.textContent = 'Purge';
+      purgeBtn.removeAttribute('disabled');
+    }
+  });
+
+  onCacheIndexChange(() => {
+    updateCacheStats();
+  });
+}
+
 initPopup();
+updateCacheStats();
+initPurgeButton();

@@ -18,6 +18,8 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   autoFormatLinks: true,
   autoFormatGithubLinks: true,
   autoFormatJiraLinks: true,
+  threadExternalLinks: true,
+  threadLinkedThreads: true,
 };
 
 // Slack DOM selectors (priority: data-qa > aria > class)
@@ -44,7 +46,16 @@ export const SLACK_WORKSPACE_URL_PATTERN = /^https:\/\/app\.slack\.com\/client\/
 export const SLACK_SUBDOMAIN_PATTERN = /^https:\/\/([^.]+)\.slack\.com/;
 // Link formatting patterns
 export const GITHUB_PR_ISSUE_URL_PATTERN = /^https:\/\/github\.com\/[^/]+\/([^/]+)\/(?:pull|issues)\/(\d+)\/?$/;
+export const GITHUB_PR_URL_FULL_PATTERN = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/;
 export const JIRA_ISSUE_URL_PATTERN = /^https:\/\/[^/]+\.atlassian\.net\/browse\/([A-Z][A-Z0-9]+-\d+)\/?$/;
+
+// Thread link patterns
+export const SLACK_THREAD_URL_PATTERN = /^https:\/\/[^/]+\.slack\.com\/archives\/([A-Z0-9]+)\/p(\d+)/;
+export const SLACK_INTERNAL_LINK_PATTERN = /^https:\/\/[^/]+\.slack\.com\//;
+
+// Storage keys for link cache
+export const STORAGE_KEY_THREAD_LINKS_PREFIX = 'threadLinks:';
+export const STORAGE_KEY_THREAD_LINKS_INDEX = 'threadLinksIndex';
 
 // Extension badge
 export const BADGE_DEGRADED = '!';

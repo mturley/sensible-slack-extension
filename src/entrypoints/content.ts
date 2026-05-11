@@ -5,6 +5,7 @@ import type { ExtensionSettings } from '../types';
 import { initMessageActions, destroyMessageActions } from '../modules/message-actions';
 import { initManualReadControl, destroyManualReadControl } from '../modules/manual-read-control';
 import { initLinkFormatter, destroyLinkFormatter } from '../modules/link-formatter';
+import { initThreadLinks, destroyThreadLinks } from '../modules/thread-links';
 import '../styles/content.css';
 
 export default defineContentScript({
@@ -45,6 +46,12 @@ export default defineContentScript({
         initLinkFormatter(settings);
       } else {
         destroyLinkFormatter();
+      }
+
+      if (settings.threadExternalLinks || settings.threadLinkedThreads) {
+        initThreadLinks(workspaceId, settings);
+      } else {
+        destroyThreadLinks();
       }
     }
 

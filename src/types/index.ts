@@ -9,10 +9,36 @@ export interface ExtensionSettings {
   autoFormatLinks: boolean;
   autoFormatGithubLinks: boolean;
   autoFormatJiraLinks: boolean;
+  threadExternalLinks: boolean;
+  threadLinkedThreads: boolean;
 }
 
 export interface StorageSchema {
   settings: ExtensionSettings;
+}
+
+export interface CachedLink {
+  url: string;
+  domain: string;
+  title?: string;
+  description?: string;
+  faviconUrl?: string;
+  authorName?: string;
+  channelName?: string;
+  messagePreview?: string;
+  threadId?: string;
+  firstSeenAt: number;
+}
+
+export interface ThreadLinkCache {
+  threadId: string;
+  links: CachedLink[];
+  processedMsgTimestamps: string[];
+  lastUpdated: number;
+}
+
+export interface ThreadLinksIndex {
+  [threadId: string]: number;
 }
 
 export type MessageActionType = 'copy-link' | 'open-thread';

@@ -61,6 +61,32 @@
             <span class="checkbox-label">Jira issue links</span>
           </label>
         </div>
+
+        <label class="toggle-row">
+          <span class="toggle-label">Thread external links dropdown</span>
+          <input type="checkbox" id="toggle-threadExternalLinks" />
+          <span class="toggle-slider"></span>
+        </label>
+
+        <label class="toggle-row">
+          <span class="toggle-label">Thread linked threads dropdown</span>
+          <input type="checkbox" id="toggle-threadLinkedThreads" />
+          <span class="toggle-slider"></span>
+        </label>
+
+        <div class="cache-management">
+          <div class="cache-stats" id="cache-stats">0 links cached</div>
+          <div class="purge-row">
+            <span class="purge-label">Purge links from last:</span>
+            <select id="purge-timeframe" class="purge-select">
+              <option value="1">1 day</option>
+              <option value="7">7 days</option>
+              <option value="30">30 days</option>
+              <option value="all">All time</option>
+            </select>
+            <button id="purge-btn" class="purge-btn" type="button">Purge</button>
+          </div>
+        </div>
       </div>
 
       <div class="footer">

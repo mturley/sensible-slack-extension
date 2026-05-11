@@ -7,7 +7,7 @@ export default defineConfig({
     name: 'Sensible Slack',
     description: 'Enhances the Slack web client with manual thread read control and quick message actions.',
     permissions: ['storage', 'webRequest', 'webRequestBlocking'],
-    host_permissions: ['*://*.slack.com/*'],
+    host_permissions: ['*://*.slack.com/*', '*://api.github.com/*'],
     browser_specific_settings: {
       gecko: {
         id: 'sensible-slack@mturley',
