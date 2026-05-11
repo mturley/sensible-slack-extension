@@ -20,6 +20,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   autoFormatJiraLinks: true,
   threadExternalLinks: true,
   threadLinkedThreads: true,
+  threadTopButton: true,
 };
 
 // Slack DOM selectors (priority: data-qa > aria > class)

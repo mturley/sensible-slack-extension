@@ -7,7 +7,7 @@ import {
   GITHUB_PR_URL_FULL_PATTERN,
 } from '../shared/constants';
 import { getThreadLinks, saveThreadLinks, mergeLinks } from '../shared/link-cache';
-import type { ExtensionSettings, CachedLink, ThreadLinkCache } from '../types';
+import type { ExtensionSettings, CachedLink, ThreadLinkCache, ThreadRootInfo } from '../types';
 
 let active = false;
 let disconnectObserver: (() => void) | null = null;
@@ -21,10 +21,13 @@ let threadsPageScrollHandler: (() => void) | null = null;
 let threadsPageScrollEl: Element | null = null;
 let floatingContainer: HTMLElement | null = null;
 let scrollScanTimer: ReturnType<typeof setTimeout> | null = null;
+let flexpaneScrollHandler: (() => void) | null = null;
+let flexpaneScrollEl: Element | null = null;
 const threadCacheMap = new Map<string, ThreadLinkCache>();
 const githubPrLookedUp = new Set<string>();
 
 const SCANNED_MARKER = 'data-se-links-scanned';
+const BTN_TOP_CLASS = 'se-top-of-thread-btn';
 const BTN_EXTERNAL_CLASS = 'se-thread-links-btn';
 const BTN_THREADS_CLASS = 'se-linked-threads-btn';
 const DROPDOWN_CLASS = 'se-thread-link-dropdown';
@@ -34,7 +37,8 @@ const DROPDOWN_CLASS = 'se-thread-link-dropdown';
 export function initThreadLinks(_wsId: string, settings: ExtensionSettings) {
   const settingsChanged = currentSettings &&
     (currentSettings.threadExternalLinks !== settings.threadExternalLinks ||
-     currentSettings.threadLinkedThreads !== settings.threadLinkedThreads);
+     currentSettings.threadLinkedThreads !== settings.threadLinkedThreads ||
+     currentSettings.threadTopButton !== settings.threadTopButton);
   currentSettings = settings;
 
   if (active) {
@@ -81,6 +85,7 @@ export function destroyThreadLinks() {
     disconnectObserver = null;
   }
 
+  teardownFlexpaneScroll();
   teardownThreadsPageScroll();
   closeDropdownIfOpen();
   document.querySelectorAll(`.se-thread-link-wrapper, .se-floating-thread-links, .${BTN_EXTERNAL_CLASS}, .${BTN_THREADS_CLASS}, .${DROPDOWN_CLASS}`).forEach((el) => el.remove());
@@ -162,8 +167,12 @@ function scanThreadContext(container: Element, context: 'flexpane' | 'threads-pa
     newLinks.push(...extractLinksFromMessage(msg));
   }
 
-  if (foundNew || !document.querySelector(`.se-thread-link-wrapper[data-se-thread="${threadId}"]`) || !threadCacheMap.has(threadId)) {
+  if (foundNew || !container.querySelector(`.se-thread-link-wrapper[data-se-thread="${threadId}"]`) || !threadCacheMap.has(threadId)) {
     persistAndUpdateUI(threadId, newLinks, container, context);
+  }
+
+  if (context === 'flexpane') {
+    setupFlexpaneScroll(container);
   }
 }
 
@@ -243,6 +252,40 @@ function scanThreadsPage(threadsView: Element) {
   }
 
   setupThreadsPageScroll(threadsView);
+}
+
+// ── Flexpane Scroll ─────────────────────────────────────────────────
+
+function setupFlexpaneScroll(container: Element) {
+  const scrollEl = container.querySelector('[data-qa="slack_kit_scrollbar"]');
+  if (!scrollEl || scrollEl === flexpaneScrollEl) return;
+
+  teardownFlexpaneScroll();
+  flexpaneScrollEl = scrollEl;
+  flexpaneScrollHandler = () => updateTopOfThreadButton(container, 'flexpane');
+  scrollEl.addEventListener('scroll', flexpaneScrollHandler, { passive: true });
+}
+
+function teardownFlexpaneScroll() {
+  if (flexpaneScrollEl && flexpaneScrollHandler) {
+    flexpaneScrollEl.removeEventListener('scroll', flexpaneScrollHandler);
+  }
+  flexpaneScrollEl = null;
+  flexpaneScrollHandler = null;
+}
+
+function updateTopOfThreadButton(container: Element, context: 'flexpane' | 'threads-page') {
+  const headerEl = context === 'flexpane'
+    ? container.querySelector('.p-flexpane_header__primary')
+    : container;
+  if (!headerEl) return;
+
+  const btn = headerEl.querySelector(`.${BTN_TOP_CLASS}`) as HTMLButtonElement | null;
+  if (!btn) return;
+
+  const atTop = isAtTopOfThread(container, context);
+  btn.disabled = atTop;
+  btn.classList.toggle('se-thread-link-btn--disabled', atTop);
 }
 
 // ── Floating Buttons on Threads Page ────────────────────────────────
@@ -356,13 +399,38 @@ function updateFloatingButtons() {
         const externalLinks = cache.links.filter((l) => !SLACK_INTERNAL_LINK_PATTERN.test(l.url));
         const threadLinks = cache.links.filter((l) => SLACK_THREAD_URL_PATTERN.test(l.url));
 
+        const topBtn = document.createElement('button');
+        topBtn.className = `${BTN_TOP_CLASS} se-thread-link-btn`;
+        const topLabel = document.createElement('span');
+        topLabel.innerHTML = TOP_OF_THREAD_SVG;
+        topBtn.appendChild(topLabel);
+        if (cache.rootInfo) {
+          topBtn.appendChild(buildTooltipContent(cache.rootInfo));
+        }
+        topBtn.type = 'button';
+        topBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const droppableKey = activeThreadId!.replace(':', '-');
+          const pTs = droppableKey.split('-').slice(1).join('').replace('.', '');
+          const channelId = droppableKey.split('-')[0];
+          const header = document.querySelector(
+            `[data-qa="threads_view_header"] a[href*="/archives/${channelId}/p${pTs}"]`
+          )?.closest('[data-qa="threads_view_header"]');
+          if (header) {
+            header.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          } else if (scrollEl) {
+            scrollEl.scrollTo({ top: 0, behavior: 'smooth' });
+          }
+        });
+        floatingContainer.appendChild(topBtn);
+
         if (currentSettings.threadExternalLinks) {
           const btn = document.createElement('button');
           const hasLinks = externalLinks.length > 0;
           btn.className = `${BTN_EXTERNAL_CLASS} se-thread-link-btn${hasLinks ? '' : ' se-thread-link-btn--disabled'}`;
           btn.textContent = hasLinks
-            ? `🔗 ${externalLinks.length} ${externalLinks.length === 1 ? 'external link' : 'external links'}`
-            : '🔗 No external links';
+            ? `🔗 ${externalLinks.length} ${externalLinks.length === 1 ? 'link' : 'links'}`
+            : '🔗 No links';
           btn.type = 'button';
           btn.disabled = !hasLinks;
           if (hasLinks) {
@@ -412,10 +480,22 @@ async function persistAndUpdateUI(
     cache = { threadId, links: [], processedMsgTimestamps: [], lastUpdated: Date.now() };
   }
 
+  let dirty = newLinks.length > 0;
   if (newLinks.length > 0) {
     cache.links = mergeLinks(cache.links, newLinks);
     const set = processedMessages.get(threadId);
     cache.processedMsgTimestamps = set ? Array.from(set) : cache.processedMsgTimestamps;
+  }
+
+  if (container) {
+    const rootInfo = getRootMessageInfo(threadId, container, context);
+    if (rootInfo && rootInfo.text) {
+      cache.rootInfo = rootInfo;
+      dirty = true;
+    }
+  }
+
+  if (dirty) {
     await saveThreadLinks(cache);
   }
 
@@ -677,7 +757,24 @@ function detectThreadId(container: Element, context: 'flexpane' | 'threads-page'
         return flexpaneThreadId;
       }
     }
-    return flexpaneThreadId;
+    if (flexpaneThreadId) return flexpaneThreadId;
+
+    const timestamps = container.querySelectorAll('.c-timestamp[href]');
+    for (const ts of timestamps) {
+      const href = ts.getAttribute('href');
+      if (!href) continue;
+      const match = SLACK_THREAD_URL_PATTERN.exec(href);
+      if (!match) continue;
+      const channelId = match[1];
+      const threadTs = href.match(/thread_ts=([0-9.]+)/)?.[1];
+      if (threadTs) {
+        flexpaneThreadId = `${channelId}:${threadTs}`;
+        return flexpaneThreadId;
+      }
+      flexpaneThreadId = `${channelId}:${tsFromSlackP(match[2])}`;
+      return flexpaneThreadId;
+    }
+    return null;
   }
   return null;
 }
@@ -707,8 +804,8 @@ function renderButtons(
       headerEl, threadId, BTN_EXTERNAL_CLASS,
       externalLinks.length,
       hasLinks
-        ? (externalLinks.length === 1 ? 'external link' : 'external links')
-        : 'No external links',
+        ? (externalLinks.length === 1 ? 'link' : 'links')
+        : 'No links',
       '🔗', context, hasLinks,
       () => showExternalLinksDropdown(threadId, externalLinks, headerEl)
     );
@@ -733,10 +830,143 @@ function renderButtons(
     wrapper?.querySelector(`.${BTN_THREADS_CLASS}`)?.remove();
   }
 
-  const featureEnabled = currentSettings.threadExternalLinks || currentSettings.threadLinkedThreads;
+  const featureEnabled = currentSettings.threadExternalLinks || currentSettings.threadLinkedThreads || currentSettings.threadTopButton;
   if (!featureEnabled) {
     headerEl.querySelector(`.se-thread-link-wrapper[data-se-thread="${threadId}"]`)?.remove();
   }
+
+  if (currentSettings.threadTopButton) {
+    const rootInfo = getRootMessageInfo(threadId, container, context) ?? cache.rootInfo ?? null;
+    renderTopOfThreadButton(headerEl, threadId, container, context, rootInfo);
+  } else {
+    const wrapper = headerEl.querySelector(`.se-thread-link-wrapper[data-se-thread="${threadId}"]`);
+    wrapper?.querySelector(`.${BTN_TOP_CLASS}`)?.remove();
+  }
+}
+
+function getRootMessageInfo(threadId: string, container: Element, context: 'flexpane' | 'threads-page'): ThreadRootInfo | null {
+  let msgEl: Element | null = null;
+  let channelName: string | undefined;
+
+  if (context === 'flexpane') {
+    msgEl = container.querySelector('[data-qa="message_container"][data-msg-channel-id]');
+    const titleContainer = container.querySelector('[data-qa="flexpane-title-container"]');
+    const subtitle = titleContainer?.querySelector('[data-qa="subtitle"]');
+    if (subtitle?.textContent?.trim()) channelName = subtitle.textContent.trim();
+  } else {
+    const droppableKey = threadId.replace(':', '-');
+    const rootTs = threadId.split(':')[1];
+    msgEl = document.querySelector(`[data-droppable-thread="${droppableKey}"] [data-msg-ts="${rootTs}"]`)
+      ?? document.querySelector(`[data-droppable-thread="${droppableKey}"] [data-qa="message_container"]`);
+    const channelEntity = container.querySelector('[data-qa="inline_channel_entity"]');
+    if (channelEntity) channelName = channelEntity.textContent?.trim();
+  }
+
+  if (!msgEl) return null;
+
+  const author = msgEl.querySelector('[data-qa="message_sender_name"]')?.textContent?.trim();
+  const rawText = msgEl.querySelector('.p-rich_text_section')?.textContent?.trim();
+  const text = rawText ? (rawText.length > 100 ? rawText.slice(0, 100) + '…' : rawText) : undefined;
+  const tsEl = msgEl.querySelector('.c-timestamp');
+  const date = tsEl?.textContent?.trim();
+
+  return { author, text, channelName, date };
+}
+
+function isAtTopOfThread(container: Element, context: 'flexpane' | 'threads-page'): boolean {
+  const scrollEl = container.querySelector('[data-qa="slack_kit_scrollbar"]')
+    ?? container.closest('[data-qa="threads_view"]')?.querySelector('[data-qa="slack_kit_scrollbar"]');
+  if (!scrollEl) return true;
+  return scrollEl.scrollTop <= 10;
+}
+
+function scrollToTopOfThread(threadId: string, container: Element, context: 'flexpane' | 'threads-page') {
+  if (context === 'flexpane') {
+    const scrollEl = container.querySelector('[data-qa="slack_kit_scrollbar"]');
+    if (scrollEl) {
+      scrollEl.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  } else {
+    const header = container.closest('[data-qa="threads_view_header"]') ?? container;
+    header.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
+function buildTooltipContent(info: ThreadRootInfo): HTMLElement {
+  const tooltip = document.createElement('div');
+  tooltip.className = 'se-top-tooltip';
+
+  if (info.author) {
+    const authorEl = document.createElement('div');
+    authorEl.className = 'se-top-tooltip-author';
+    authorEl.textContent = info.author;
+    tooltip.appendChild(authorEl);
+  }
+
+  if (info.text) {
+    const textEl = document.createElement('div');
+    textEl.className = 'se-top-tooltip-text';
+    textEl.textContent = info.text;
+    tooltip.appendChild(textEl);
+  }
+
+  const footerParts: string[] = [];
+  if (info.channelName) footerParts.push(`Thread in #${info.channelName}`);
+  if (info.date) footerParts.push(info.date);
+  if (footerParts.length > 0) {
+    const footerEl = document.createElement('div');
+    footerEl.className = 'se-top-tooltip-footer';
+    footerEl.textContent = footerParts.join(' · ');
+    tooltip.appendChild(footerEl);
+  }
+
+  return tooltip;
+}
+
+function renderTopOfThreadButton(
+  headerEl: Element,
+  threadId: string,
+  container: Element,
+  context: 'flexpane' | 'threads-page',
+  rootInfo?: ThreadRootInfo | null
+) {
+  let wrapper = headerEl.querySelector(`.se-thread-link-wrapper[data-se-thread="${threadId}"]`) as HTMLElement | null;
+
+  if (!wrapper) return;
+
+  let btn = wrapper.querySelector(`.${BTN_TOP_CLASS}`) as HTMLButtonElement | null;
+  const atTop = isAtTopOfThread(container, context);
+
+  if (btn) {
+    btn.disabled = atTop;
+    btn.classList.toggle('se-thread-link-btn--disabled', atTop);
+    if (rootInfo) {
+      const existing = btn.querySelector('.se-top-tooltip');
+      if (existing) existing.remove();
+      btn.appendChild(buildTooltipContent(rootInfo));
+    }
+    return;
+  }
+
+  btn = document.createElement('button');
+  btn.className = `${BTN_TOP_CLASS} se-thread-link-btn${atTop ? ' se-thread-link-btn--disabled' : ''}`;
+  btn.type = 'button';
+  btn.disabled = atTop;
+
+  const label = document.createElement('span');
+  label.innerHTML = TOP_OF_THREAD_SVG;
+  btn.appendChild(label);
+
+  if (rootInfo) {
+    btn.appendChild(buildTooltipContent(rootInfo));
+  }
+
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    scrollToTopOfThread(threadId, container, context);
+  });
+
+  wrapper.insertBefore(btn, wrapper.firstChild);
 }
 
 function renderOrUpdateButton(
@@ -833,6 +1063,8 @@ function attachDropdown(dropdown: HTMLElement) {
     document.addEventListener('keydown', closeDropdownHandler!);
   }, 0);
 }
+
+const TOP_OF_THREAD_SVG = '<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a7 7 0 1 0 3.394 13.124.75.75 0 0 1 .542-.074l2.794.68-.68-2.794a.75.75 0 0 1 .073-.542A7 7 0 0 0 10 3m-8.5 7a8.5 8.5 0 1 1 16.075 3.859l.904 3.714a.75.75 0 0 1-.906.906l-3.714-.904A8.5 8.5 0 0 1 1.5 10M6 8.25a.75.75 0 0 1 .75-.75h6.5a.75.75 0 0 1 0 1.5h-6.5A.75.75 0 0 1 6 8.25M6.75 11a.75.75 0 0 0 0 1.5h4.5a.75.75 0 0 0 0-1.5z" clip-rule="evenodd"/></svg>';
 
 const SCROLL_TO_SVG = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="10" r="6"/><line x1="10" y1="2" x2="10" y2="5"/><line x1="10" y1="15" x2="10" y2="18"/><line x1="2" y1="10" x2="5" y2="10"/><line x1="15" y1="10" x2="18" y2="10"/><circle cx="10" cy="10" r="1.5" fill="currentColor" stroke="none"/></svg>';
 

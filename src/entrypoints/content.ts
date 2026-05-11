@@ -48,7 +48,7 @@ export default defineContentScript({
         destroyLinkFormatter();
       }
 
-      if (settings.threadExternalLinks || settings.threadLinkedThreads) {
+      if (settings.threadExternalLinks || settings.threadLinkedThreads || settings.threadTopButton) {
         initThreadLinks(workspaceId, settings);
       } else {
         destroyThreadLinks();

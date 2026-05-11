@@ -15,6 +15,7 @@ const TOGGLE_KEYS: (keyof ExtensionSettings)[] = [
   'autoFormatJiraLinks',
   'threadExternalLinks',
   'threadLinkedThreads',
+  'threadTopButton',
 ];
 
 const SUB_TOGGLE_PARENTS: Partial<Record<keyof ExtensionSettings, keyof ExtensionSettings>> = {

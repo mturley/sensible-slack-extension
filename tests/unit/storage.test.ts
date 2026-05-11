@@ -36,6 +36,7 @@ describe('getSettings', () => {
       autoFormatJiraLinks: true,
       threadExternalLinks: true,
       threadLinkedThreads: true,
+      threadTopButton: true,
     });
   });
 
@@ -66,6 +67,7 @@ describe('setSettings', () => {
       autoFormatJiraLinks: true,
       threadExternalLinks: true,
       threadLinkedThreads: true,
+      threadTopButton: true,
     };
 
     await setSettings(settings);

@@ -11,6 +11,7 @@ export interface ExtensionSettings {
   autoFormatJiraLinks: boolean;
   threadExternalLinks: boolean;
   threadLinkedThreads: boolean;
+  threadTopButton: boolean;
 }
 
 export interface StorageSchema {
@@ -32,10 +33,18 @@ export interface CachedLink {
   firstSeenAt: number;
 }
 
+export interface ThreadRootInfo {
+  author?: string;
+  text?: string;
+  channelName?: string;
+  date?: string;
+}
+
 export interface ThreadLinkCache {
   threadId: string;
   links: CachedLink[];
   processedMsgTimestamps: string[];
+  rootInfo?: ThreadRootInfo;
   lastUpdated: number;
 }
 
