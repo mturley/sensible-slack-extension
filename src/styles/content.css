@@ -249,6 +249,12 @@
   display: block;
 }
 
+.se-top-tooltip--right {
+  left: auto;
+  transform: none;
+  right: 0;
+}
+
 .se-top-tooltip-author {
   font-size: 13px;
   font-weight: 600;

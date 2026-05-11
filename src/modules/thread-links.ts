@@ -405,21 +405,15 @@ function updateFloatingButtons() {
         topLabel.innerHTML = TOP_OF_THREAD_SVG;
         topBtn.appendChild(topLabel);
         if (cache.rootInfo) {
-          topBtn.appendChild(buildTooltipContent(cache.rootInfo));
+          const alignRight = !currentSettings?.threadExternalLinks || !currentSettings?.threadLinkedThreads;
+          topBtn.appendChild(buildTooltipContent(cache.rootInfo, alignRight));
         }
         topBtn.type = 'button';
         topBtn.addEventListener('click', (e) => {
           e.stopPropagation();
-          const droppableKey = activeThreadId!.replace(':', '-');
-          const pTs = droppableKey.split('-').slice(1).join('').replace('.', '');
-          const channelId = droppableKey.split('-')[0];
-          const header = document.querySelector(
-            `[data-qa="threads_view_header"] a[href*="/archives/${channelId}/p${pTs}"]`
-          )?.closest('[data-qa="threads_view_header"]');
-          if (header) {
-            header.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          } else if (scrollEl) {
-            scrollEl.scrollTo({ top: 0, behavior: 'smooth' });
+          const threadsView = document.querySelector('[data-qa="threads_view"]');
+          if (threadsView) {
+            scrollToTopOfThread(activeThreadId!, threadsView, 'threads-page');
           }
         });
         floatingContainer.appendChild(topBtn);
@@ -835,7 +829,7 @@ function renderButtons(
     headerEl.querySelector(`.se-thread-link-wrapper[data-se-thread="${threadId}"]`)?.remove();
   }
 
-  if (currentSettings.threadTopButton) {
+  if (currentSettings.threadTopButton && context === 'flexpane') {
     const rootInfo = getRootMessageInfo(threadId, container, context) ?? cache.rootInfo ?? null;
     renderTopOfThreadButton(headerEl, threadId, container, context, rootInfo);
   } else {
@@ -886,15 +880,45 @@ function scrollToTopOfThread(threadId: string, container: Element, context: 'fle
     if (scrollEl) {
       scrollEl.scrollTo({ top: 0, behavior: 'smooth' });
     }
-  } else {
-    const header = container.closest('[data-qa="threads_view_header"]') ?? container;
-    header.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
   }
+
+  const parts = threadId.split(':');
+  const channelId = parts[0];
+  const pTs = parts.length >= 2 ? parts[1].replace('.', '') : '';
+  const threadsView = document.querySelector('[data-qa="threads_view"]');
+  const scrollEl = threadsView?.querySelector('[data-qa="slack_kit_scrollbar"]');
+  if (!scrollEl) return;
+
+  const findHeader = () => threadsView?.querySelector(
+    `[data-qa="threads_view_header"] a[href*="/archives/${channelId}/p${pTs}"]`
+  )?.closest('[data-qa="threads_view_header"]');
+
+  const header = findHeader();
+  if (header) {
+    header.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
+
+  let attempts = 0;
+  const scrollStep = scrollEl.clientHeight * 0.7;
+  const tryScroll = () => {
+    const found = findHeader();
+    if (found) {
+      found.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    if (++attempts > 50) return;
+    scrollEl.scrollTop -= scrollStep;
+    setTimeout(tryScroll, 250);
+  };
+  scrollEl.scrollTop -= scrollStep;
+  setTimeout(tryScroll, 250);
 }
 
-function buildTooltipContent(info: ThreadRootInfo): HTMLElement {
+function buildTooltipContent(info: ThreadRootInfo, alignRight = false): HTMLElement {
   const tooltip = document.createElement('div');
-  tooltip.className = 'se-top-tooltip';
+  tooltip.className = `se-top-tooltip${alignRight ? ' se-top-tooltip--right' : ''}`;
 
   if (info.author) {
     const authorEl = document.createElement('div');
@@ -943,7 +967,8 @@ function renderTopOfThreadButton(
     if (rootInfo) {
       const existing = btn.querySelector('.se-top-tooltip');
       if (existing) existing.remove();
-      btn.appendChild(buildTooltipContent(rootInfo));
+      const alignRight = !currentSettings?.threadExternalLinks || !currentSettings?.threadLinkedThreads;
+      btn.appendChild(buildTooltipContent(rootInfo, alignRight));
     }
     return;
   }
@@ -958,7 +983,8 @@ function renderTopOfThreadButton(
   btn.appendChild(label);
 
   if (rootInfo) {
-    btn.appendChild(buildTooltipContent(rootInfo));
+    const alignRight = !currentSettings?.threadExternalLinks || !currentSettings?.threadLinkedThreads;
+    btn.appendChild(buildTooltipContent(rootInfo, alignRight));
   }
 
   btn.addEventListener('click', (e) => {
@@ -1408,8 +1434,6 @@ function showLinkedThreadsDropdown(
     linkEl.href = link.url;
     linkEl.target = '_blank';
     linkEl.rel = 'noopener noreferrer';
-    if (link.sourceMsgTs) {
-      }
 
     if (link.authorName) {
       const authorEl = document.createElement('div');
