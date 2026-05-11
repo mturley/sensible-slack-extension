@@ -906,10 +906,16 @@ function highlightMessage(el: Element) {
   setTimeout(() => el.classList.remove('se-highlight-message'), 2000);
 }
 
-function openThreadAndScrollTo(threadId: string, msgTs: string) {
+function openThreadAndScrollTo(threadId: string, msgTs: string, linkedThreadUrl?: string) {
+  if (linkedThreadUrl) {
+    const found = findAndClickViewReply(msgTs, linkedThreadUrl);
+    if (found) return;
+    scrollToMessageThenClickViewReply(msgTs, linkedThreadUrl);
+    return;
+  }
+
   const droppableKey = threadId.replace(':', '-');
   const threadItems = document.querySelectorAll(`[data-droppable-thread="${droppableKey}"]`);
-
   const parts = threadId.split(':');
   const rootTs = parts.length >= 2 ? parts[1] : null;
 
@@ -923,6 +929,93 @@ function openThreadAndScrollTo(threadId: string, msgTs: string) {
       return;
     }
   }
+}
+
+function findAndClickViewReply(msgTs: string, linkedThreadUrl: string): boolean {
+  const flexpane = document.querySelector('[data-qa="threads_flexpane"]');
+  const msg = flexpane?.querySelector(`[data-msg-ts="${msgTs}"]`) ?? document.querySelector(`[data-msg-ts="${msgTs}"]`);
+  if (!msg) return false;
+
+  const attachments = msg.querySelectorAll('.c-message_attachment');
+  for (const att of attachments) {
+    const links = att.querySelectorAll('a');
+    for (const link of links) {
+      const text = link.textContent?.trim().toLowerCase();
+      if (text === 'view reply' || text === 'view message' || text === 'view thread') {
+        (link as HTMLElement).click();
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function scrollToMessageThenClickViewReply(msgTs: string, linkedThreadUrl: string) {
+  const flexpane = document.querySelector('[data-qa="threads_flexpane"]');
+  if (!flexpane) return;
+
+  const scrollEl = flexpane.querySelector('[data-qa="slack_kit_scrollbar"]');
+  if (!scrollEl) return;
+
+  let attempts = 0;
+  const maxAttempts = 50;
+  const scrollStep = scrollEl.clientHeight * 0.7;
+  let direction = -1;
+  let hitTop = false;
+
+  const tryScroll = () => {
+    if (findAndClickViewReply(msgTs, linkedThreadUrl)) return;
+    if (++attempts > maxAttempts) return;
+
+    if (!hitTop && scrollEl.scrollTop <= 0) {
+      hitTop = true;
+      direction = 1;
+    }
+    scrollEl.scrollTop += direction * scrollStep;
+    setTimeout(tryScroll, 250);
+  };
+
+  scrollEl.scrollTop += direction * scrollStep;
+  setTimeout(tryScroll, 250);
+}
+
+function openThreadScrollAndClickViewReply(threadId: string, msgTs: string, linkedThreadUrl: string) {
+  const droppableKey = threadId.replace(':', '-');
+  const threadItems = document.querySelectorAll(`[data-droppable-thread="${droppableKey}"]`);
+  const parts = threadId.split(':');
+  const rootTs = parts.length >= 2 ? parts[1] : null;
+
+  for (const item of threadItems) {
+    const msg = item.querySelector('[data-qa="message_container"]');
+    if (msg && msg.getAttribute('data-msg-ts') === rootTs) continue;
+    const timestamp = item.querySelector('.c-timestamp');
+    if (timestamp instanceof HTMLElement) {
+      timestamp.click();
+      waitForFlexpaneThenScrollAndClick(msgTs, linkedThreadUrl);
+      return;
+    }
+  }
+}
+
+function waitForFlexpaneThenScrollAndClick(msgTs: string, linkedThreadUrl: string) {
+  let checks = 0;
+  const poll = () => {
+    const flexpane = document.querySelector('[data-qa="threads_flexpane"]');
+    if (flexpane) {
+      const waitForMessages = () => {
+        const msgs = flexpane.querySelectorAll('[data-qa="message_container"]');
+        if (msgs.length > 1) {
+          setTimeout(() => scrollToMessageThenClickViewReply(msgTs, linkedThreadUrl), 300);
+          return;
+        }
+        if (++checks < 60) setTimeout(waitForMessages, 200);
+      };
+      waitForMessages();
+      return;
+    }
+    if (++checks < 60) setTimeout(poll, 200);
+  };
+  setTimeout(poll, 200);
 }
 
 function waitForFlexpaneAndScroll(msgTs: string) {
@@ -1083,6 +1176,8 @@ function showLinkedThreadsDropdown(
     linkEl.href = link.url;
     linkEl.target = '_blank';
     linkEl.rel = 'noopener noreferrer';
+    if (link.sourceMsgTs) {
+      }
 
     if (link.authorName) {
       const authorEl = document.createElement('div');
