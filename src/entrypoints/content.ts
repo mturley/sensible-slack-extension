@@ -6,6 +6,7 @@ import { initMessageActions, destroyMessageActions } from '../modules/message-ac
 import { initManualReadControl, destroyManualReadControl } from '../modules/manual-read-control';
 import { initLinkFormatter, destroyLinkFormatter } from '../modules/link-formatter';
 import { initThreadLinks, destroyThreadLinks } from '../modules/thread-links';
+import { requestSpaNav } from '../shared/slack-nav-client';
 import '../styles/content.css';
 
 export default defineContentScript({
@@ -90,7 +91,23 @@ export default defineContentScript({
     });
 
     async function openThreadByTs(dataTs: string) {
-      // Wait for the target message to render (retry for up to 15s)
+      const channelMatch = window.location.pathname.match(/\/client\/[^/]+\/([A-Z0-9]+)/);
+      const channelId = channelMatch?.[1];
+
+      if (channelId) {
+        try {
+          const result = await requestSpaNav({
+            action: 'openThread',
+            channelId,
+            threadTs: dataTs,
+          });
+          if (result.success) return;
+        } catch (_e) {
+          // SPA nav failed, fall back to DOM approach
+        }
+      }
+
+      // Fallback: wait for message element and click thread button
       let targetMsg: Element | null = null;
       const deadline = Date.now() + 15000;
       while (!targetMsg && Date.now() < deadline) {
@@ -103,7 +120,6 @@ export default defineContentScript({
       }
       if (!targetMsg) return;
 
-      // Try clicking the reply bar first (for messages with existing replies)
       for (const selector of ['[data-qa="reply_bar_count"]', '[data-qa="reply_bar_view_thread"]', '[data-qa="reply_bar"]']) {
         const btn = targetMsg.querySelector(selector);
         if (btn instanceof HTMLElement) {
@@ -112,7 +128,6 @@ export default defineContentScript({
         }
       }
 
-      // Otherwise, hover and click the thread button from the action bar
       const hoverTarget =
         targetMsg.querySelector('[class*="c-message_kit__hover"]') ?? targetMsg;
       hoverTarget.dispatchEvent(new PointerEvent('pointerenter', { bubbles: true }));

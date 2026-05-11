@@ -7,6 +7,7 @@ import {
   GITHUB_PR_URL_FULL_PATTERN,
 } from '../shared/constants';
 import { getThreadLinks, saveThreadLinks, mergeLinks } from '../shared/link-cache';
+import { requestSpaNav, parseSlackThreadUrl } from '../shared/slack-nav-client';
 import type { ExtensionSettings, CachedLink, ThreadLinkCache, ThreadRootInfo } from '../types';
 
 let active = false;
@@ -1094,6 +1095,8 @@ const TOP_OF_THREAD_SVG = '<svg viewBox="0 0 20 20" fill="currentColor"><path fi
 
 const SCROLL_TO_SVG = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="10" r="6"/><line x1="10" y1="2" x2="10" y2="5"/><line x1="10" y1="15" x2="10" y2="18"/><line x1="2" y1="10" x2="5" y2="10"/><line x1="15" y1="10" x2="18" y2="10"/><circle cx="10" cy="10" r="1.5" fill="currentColor" stroke="none"/></svg>';
 
+const OPEN_NEW_TAB_SVG = '<svg viewBox="0 0 20 20" fill="currentColor"><path d="M4.25 5.5a.75.75 0 0 0-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 0 0 .75-.75v-3.5a.75.75 0 0 1 1.5 0v3.5a2.25 2.25 0 0 1-2.25 2.25h-8.5A2.25 2.25 0 0 1 2 14.75v-8.5A2.25 2.25 0 0 1 4.25 4h3.5a.75.75 0 0 1 0 1.5zM10 3.75a.75.75 0 0 1 .75-.75h5.5a.75.75 0 0 1 .75.75v5.5a.75.75 0 0 1-1.5 0V5.56l-5.22 5.22a.75.75 0 1 1-1.06-1.06l5.22-5.22H10.75A.75.75 0 0 1 10 3.75" /></svg>';
+
 const COPY_LINK_SVG = '<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.306 3.756a2.75 2.75 0 0 1 3.889 0l.05.05a2.75 2.75 0 0 1 0 3.889l-3.18 3.18a2.75 2.75 0 0 1-3.98-.095l-.03-.034a.75.75 0 0 0-1.11 1.009l.03.034a4.25 4.25 0 0 0 6.15.146l3.18-3.18a4.25 4.25 0 0 0 0-6.01l-.05-.05a4.25 4.25 0 0 0-6.01 0L9.47 4.47a.75.75 0 1 0 1.06 1.06zm-4.611 12.49a2.75 2.75 0 0 1-3.89 0l-.05-.051a2.75 2.75 0 0 1 0-3.89l3.18-3.179a2.75 2.75 0 0 1 3.98.095l.03.034a.75.75 0 1 0 1.11-1.01l-.03-.033a4.25 4.25 0 0 0-6.15-.146l-3.18 3.18a4.25 4.25 0 0 0 0 6.01l.05.05a4.25 4.25 0 0 0 6.01 0l1.775-1.775a.75.75 0 0 0-1.06-1.06z" clip-rule="evenodd"/></svg>';
 
 function createCopyButton(url: string): HTMLButtonElement {
@@ -1114,6 +1117,21 @@ function createCopyButton(url: string): HTMLButtonElement {
         btn.classList.remove('se-copied-feedback');
       }, 1200);
     });
+  });
+  return btn;
+}
+
+function createOpenInNewTabButton(url: string): HTMLButtonElement {
+  const btn = document.createElement('button');
+  btn.className = 'se-link-newtab-btn';
+  btn.type = 'button';
+  btn.title = 'Open in new tab';
+  btn.innerHTML = OPEN_NEW_TAB_SVG;
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    closeDropdownIfOpen();
+    window.open(url, '_blank', 'noopener,noreferrer');
   });
   return btn;
 }
@@ -1308,7 +1326,31 @@ function createGoToMessageButton(link: CachedLink, threadId: string, isFlexpane:
     e.preventDefault();
     e.stopPropagation();
     closeDropdownIfOpen();
-    if (isFlexpane) {
+    const parts = threadId.split(':');
+    const channelId = parts[0];
+    const threadTs = parts.length >= 2 ? parts[1] : undefined;
+    if (channelId && threadTs) {
+      requestSpaNav({
+        action: 'openThread',
+        channelId,
+        threadTs,
+        replyTs: link.sourceMsgTs!,
+      }).then((result) => {
+        if (!result.success) {
+          if (isFlexpane) {
+            scrollToMessageInFlexpane(link.sourceMsgTs!);
+          } else {
+            openThreadAndScrollTo(threadId, link.sourceMsgTs!);
+          }
+        }
+      }).catch(() => {
+        if (isFlexpane) {
+          scrollToMessageInFlexpane(link.sourceMsgTs!);
+        } else {
+          openThreadAndScrollTo(threadId, link.sourceMsgTs!);
+        }
+      });
+    } else if (isFlexpane) {
       scrollToMessageInFlexpane(link.sourceMsgTs!);
     } else {
       openThreadAndScrollTo(threadId, link.sourceMsgTs!);
@@ -1432,8 +1474,25 @@ function showLinkedThreadsDropdown(
     const linkEl = document.createElement('a');
     linkEl.className = 'se-linked-thread-item-content';
     linkEl.href = link.url;
-    linkEl.target = '_blank';
-    linkEl.rel = 'noopener noreferrer';
+    linkEl.addEventListener('click', (e) => {
+      e.preventDefault();
+      closeDropdownIfOpen();
+      const parsed = parseSlackThreadUrl(link.url);
+      if (parsed?.channelId && parsed.threadTs) {
+        requestSpaNav({
+          action: 'openThread',
+          channelId: parsed.channelId,
+          threadTs: parsed.threadTs,
+          replyTs: parsed.replyTs,
+        }).then((result) => {
+          if (!result.success) window.location.href = link.url;
+        }).catch(() => {
+          window.location.href = link.url;
+        });
+      } else {
+        window.location.href = link.url;
+      }
+    });
 
     if (link.authorName) {
       const authorEl = document.createElement('div');
@@ -1449,9 +1508,9 @@ function showLinkedThreadsDropdown(
 
     const footerParts: string[] = [];
     if (link.channelName) footerParts.push(`Thread in #${link.channelName}`);
-    const threadTs = link.threadId?.split(':')[1];
-    if (threadTs) {
-      const date = new Date(parseFloat(threadTs) * 1000);
+    const linkedThreadTs = link.threadId?.split(':')[1];
+    if (linkedThreadTs) {
+      const date = new Date(parseFloat(linkedThreadTs) * 1000);
       footerParts.push(date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }));
     }
     if (footerParts.length > 0) {
@@ -1464,6 +1523,7 @@ function showLinkedThreadsDropdown(
     itemEl.appendChild(linkEl);
     const gotoBtn = createGoToMessageButton(link, threadId, isFlexpane);
     if (gotoBtn) itemEl.appendChild(gotoBtn);
+    itemEl.appendChild(createOpenInNewTabButton(link.url));
     itemEl.appendChild(createCopyButton(link.url));
 
     dropdown.appendChild(itemEl);

@@ -57,9 +57,17 @@ Both thread link features share a persistent cache managed from the extension po
 - The popup shows how many links are cached across how many threads.
 - A **purge** control lets you clear cached links older than 1 day, 7 days, 30 days, or all time.
 
-#### How it works
+### SPA Navigation
 
-A content script running in the page's [MAIN world](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Content_scripts#main_world) wraps `XMLHttpRequest.prototype` before Slack's scripts load. When you're on the Threads page, mark-as-read requests are redirected to a blob URL returning `{"ok":true}`, preventing Slack from knowing the request was blocked. The intercepted request parameters (token, timestamps, URL) are captured and stored per-thread so they can be replayed exactly when you click "Mark as read".
+Clicking a linked thread opens it directly in Slack's thread panel without a page reload. The "scroll to message" button navigates to the specific message within the thread and highlights it with a brief flash animation.
+
+This works by hooking into Slack's internal navigation system at runtime. A [MAIN world](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Content_scripts#main_world) content script obtains webpack's internal `require` function via a probe chunk, then searches Slack's ~13,000 webpack modules by their human-readable description strings to find the view constructor and navigation thunk dispatcher. It also walks the React fiber tree to locate the workspace Redux store. This lets the extension dispatch the same Redux thunks that Slack's own UI uses when you click a channel or thread — triggering data fetching, view transitions, and URL updates as a single coordinated operation.
+
+Module IDs and export keys are discovered dynamically on each page load (~26ms), so the approach is resilient to Slack deploys that change minified code. If anything fails (e.g. Slack changes its internal architecture), the extension falls back to standard page navigation. See [`docs/reverse-engineering/navigation.md`](docs/reverse-engineering/navigation.md) for the full technical details.
+
+#### How Manual Read Control works
+
+A content script running in the page's MAIN world wraps `XMLHttpRequest.prototype` before Slack's scripts load. When you're on the Threads page, mark-as-read requests are redirected to a blob URL returning `{"ok":true}`, preventing Slack from knowing the request was blocked. The intercepted request parameters (token, timestamps, URL) are captured and stored per-thread so they can be replayed exactly when you click "Mark as read".
 
 ## Pairing with a Redirect Blocker
 
