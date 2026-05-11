@@ -531,6 +531,10 @@ function extractLinksFromMessage(msgEl: Element): CachedLink[] {
       if (matched.description) link.description = matched.description;
       if (matched.authorName) link.authorName = matched.authorName;
       if (matched.messagePreview) link.messagePreview = matched.messagePreview;
+      if (matched.footerText) {
+        const channelMatch = matched.footerText.match(/thread in\s+#?(\S+)/i);
+        if (channelMatch) link.channelName = channelMatch[1];
+      }
     }
 
     if (!link.title) {
@@ -549,6 +553,7 @@ interface UnfurlData {
   description?: string;
   authorName?: string;
   messagePreview?: string;
+  footerText?: string;
   innerText: string;
 }
 
@@ -563,6 +568,7 @@ function collectUnfurls(msgEl: Element): UnfurlData[] {
       const titleEl = att.querySelector('[data-qa="message_attachment_title"]');
       const authorEl = att.querySelector('[data-qa="message_attachment_author_name"]');
       const textEl = att.querySelector('[data-qa*="text"]') ?? att.querySelector('.c-message_attachment__body');
+      const footerEl = att.querySelector('[data-qa="message_attachment_footer"]') ?? att.querySelector('.c-message_attachment__footer');
 
       return {
         titleLink: titleLinkEl?.getAttribute('href') ?? undefined,
@@ -570,6 +576,7 @@ function collectUnfurls(msgEl: Element): UnfurlData[] {
         description: textEl?.textContent?.trim().slice(0, 200) ?? undefined,
         authorName: authorEl?.textContent?.trim() ?? undefined,
         messagePreview: textEl?.textContent?.trim().slice(0, 200) ?? undefined,
+        footerText: footerEl?.textContent?.trim() ?? undefined,
         innerText: (att.textContent ?? '').trim(),
       };
     });
@@ -824,13 +831,13 @@ function createCopyButton(url: string): HTMLButtonElement {
   btn.className = 'se-link-copy-btn';
   btn.type = 'button';
   btn.title = 'Copy link';
-  btn.textContent = '📋';
+  btn.textContent = '🔗';
   btn.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
     navigator.clipboard.writeText(url).then(() => {
       btn.textContent = '✓';
-      setTimeout(() => { btn.textContent = '📋'; }, 1500);
+      setTimeout(() => { btn.textContent = '🔗'; }, 1500);
     });
   });
   return btn;
@@ -950,29 +957,31 @@ function showLinkedThreadsDropdown(
     linkEl.target = '_blank';
     linkEl.rel = 'noopener noreferrer';
 
-    if (link.channelName || link.authorName) {
-      const metaEl = document.createElement('div');
-      metaEl.className = 'se-linked-thread-meta';
-
-      if (link.channelName) {
-        const channelEl = document.createElement('span');
-        channelEl.className = 'se-linked-thread-channel';
-        channelEl.textContent = `#${link.channelName}`;
-        metaEl.appendChild(channelEl);
-      }
-      if (link.authorName) {
-        const authorEl = document.createElement('span');
-        authorEl.className = 'se-linked-thread-author';
-        authorEl.textContent = link.authorName;
-        metaEl.appendChild(authorEl);
-      }
-      linkEl.appendChild(metaEl);
+    if (link.authorName) {
+      const authorEl = document.createElement('div');
+      authorEl.className = 'se-linked-thread-author';
+      authorEl.textContent = link.authorName;
+      linkEl.appendChild(authorEl);
     }
 
     const previewEl = document.createElement('div');
     previewEl.className = 'se-linked-thread-preview';
     previewEl.textContent = link.messagePreview ?? link.title ?? link.url;
     linkEl.appendChild(previewEl);
+
+    const footerParts: string[] = [];
+    if (link.channelName) footerParts.push(`Thread in #${link.channelName}`);
+    const threadTs = link.threadId?.split(':')[1];
+    if (threadTs) {
+      const date = new Date(parseFloat(threadTs) * 1000);
+      footerParts.push(date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }));
+    }
+    if (footerParts.length > 0) {
+      const footerEl = document.createElement('div');
+      footerEl.className = 'se-linked-thread-footer';
+      footerEl.textContent = footerParts.join(' · ');
+      linkEl.appendChild(footerEl);
+    }
 
     itemEl.appendChild(linkEl);
     itemEl.appendChild(createCopyButton(link.url));

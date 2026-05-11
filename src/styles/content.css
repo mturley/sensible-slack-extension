@@ -336,22 +336,11 @@
   border-top: 1px solid rgba(128, 128, 128, 0.1);
 }
 
-.se-linked-thread-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-
-.se-linked-thread-channel {
-  font-size: 11px;
-  font-weight: 700;
-  color: rgba(209, 210, 211, 0.6);
-}
-
 .se-linked-thread-author {
-  font-size: 11px;
-  color: rgba(209, 210, 211, 0.5);
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(209, 210, 211, 0.8);
+  margin-bottom: 2px;
 }
 
 .se-link-copy-btn {
@@ -388,4 +377,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.se-linked-thread-footer {
+  font-size: 11px;
+  color: rgba(209, 210, 211, 0.4);
+  margin-top: 4px;
 }
