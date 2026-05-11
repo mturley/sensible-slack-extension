@@ -19,6 +19,7 @@ let closeDropdownHandler: ((e: MouseEvent | KeyboardEvent) => void) | null = nul
 let threadsPageScrollHandler: (() => void) | null = null;
 let threadsPageScrollEl: Element | null = null;
 let floatingContainer: HTMLElement | null = null;
+let scrollScanTimer: ReturnType<typeof setTimeout> | null = null;
 const threadCacheMap = new Map<string, ThreadLinkCache>();
 const githubPrLookedUp = new Set<string>();
 
@@ -46,9 +47,9 @@ export function initThreadLinks(_wsId: string, settings: ExtensionSettings) {
   active = true;
   scanAll();
 
-  disconnectObserver = observeDOM(document.body, () => {
+  disconnectObserver = observeDOM(document.body, (_mutations) => {
     if (debounceTimer) clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(scanAll, 200);
+    debounceTimer = setTimeout(scanAll, 500);
   });
 }
 
@@ -134,26 +135,24 @@ function scanThreadContext(container: Element, context: 'flexpane' | 'threads-pa
   const newLinks: CachedLink[] = [];
   let foundNew = false;
 
-  for (const msg of messages) {
-    if (msg.hasAttribute(SCANNED_MARKER)) continue;
-    msg.setAttribute(SCANNED_MARKER, 'true');
-    foundNew = true;
-
-    const msgTs = msg.getAttribute('data-msg-ts');
-    if (msgTs) {
-      let set = processedMessages.get(threadId);
-      if (!set) {
-        set = new Set();
-        processedMessages.set(threadId, set);
-      }
-      set.add(msgTs);
-    }
-
-    const extracted = extractLinksFromMessage(msg);
-    newLinks.push(...extracted);
+  let set = processedMessages.get(threadId);
+  if (!set) {
+    set = new Set();
+    processedMessages.set(threadId, set);
   }
 
-  if (foundNew || !document.querySelector(`.${BTN_EXTERNAL_CLASS}[data-se-thread="${threadId}"]`)) {
+  for (const msg of messages) {
+    const msgTs = msg.getAttribute('data-msg-ts');
+    if (msg.getAttribute(SCANNED_MARKER) === msgTs) continue;
+    msg.setAttribute(SCANNED_MARKER, msgTs ?? 'true');
+    if (msgTs && set.has(msgTs)) continue;
+    if (msgTs) set.add(msgTs);
+
+    foundNew = true;
+    newLinks.push(...extractLinksFromMessage(msg));
+  }
+
+  if (foundNew || !document.querySelector(`.se-thread-link-wrapper[data-se-thread="${threadId}"]`) || !threadCacheMap.has(threadId)) {
     persistAndUpdateUI(threadId, newLinks, container, context);
   }
 }
@@ -185,10 +184,14 @@ function scanThreadsPage(threadsView: Element) {
 
     const droppable = item.querySelector('[data-droppable-thread]');
     const droppableAttr = droppable?.getAttribute('data-droppable-thread');
-    if (droppableAttr && !currentThreadId) {
+    if (droppableAttr) {
       const parts = droppableAttr.split('-');
       if (parts.length >= 2) {
-        currentThreadId = `${parts[0]}:${parts.slice(1).join('.')}`;
+        const droppableId = `${parts[0]}:${parts.slice(1).join('.')}`;
+        if (droppableId !== currentThreadId) {
+          currentThreadId = droppableId;
+          currentHeader = null;
+        }
         if (!threadGroups.has(currentThreadId)) {
           threadGroups.set(currentThreadId, { headerEl: null, messages: [] });
         }
@@ -207,25 +210,24 @@ function scanThreadsPage(threadsView: Element) {
     const newLinks: CachedLink[] = [];
     let foundNew = false;
 
+    let set = processedMessages.get(threadId);
+    if (!set) {
+      set = new Set();
+      processedMessages.set(threadId, set);
+    }
+
     for (const msg of group.messages) {
-      if (msg.hasAttribute(SCANNED_MARKER)) continue;
-      msg.setAttribute(SCANNED_MARKER, 'true');
-      foundNew = true;
-
       const msgTs = msg.getAttribute('data-msg-ts');
-      if (msgTs) {
-        let set = processedMessages.get(threadId);
-        if (!set) {
-          set = new Set();
-          processedMessages.set(threadId, set);
-        }
-        set.add(msgTs);
-      }
+      if (msg.getAttribute(SCANNED_MARKER) === msgTs) continue;
+      msg.setAttribute(SCANNED_MARKER, msgTs ?? 'true');
+      if (msgTs && set.has(msgTs)) continue;
+      if (msgTs) set.add(msgTs);
 
+      foundNew = true;
       newLinks.push(...extractLinksFromMessage(msg));
     }
 
-    if (group.headerEl && (foundNew || !group.headerEl.querySelector(`.${BTN_EXTERNAL_CLASS}`))) {
+    if (foundNew || (group.headerEl && !group.headerEl.querySelector('.se-thread-link-wrapper')) || !threadCacheMap.has(threadId)) {
       persistAndUpdateUI(threadId, newLinks, group.headerEl, 'threads-page');
     }
   }
@@ -242,12 +244,23 @@ function setupThreadsPageScroll(threadsView: Element) {
   teardownThreadsPageScroll();
   threadsPageScrollEl = scrollEl;
 
-  threadsPageScrollHandler = () => updateFloatingButtons();
+  threadsPageScrollHandler = () => {
+    updateFloatingButtons();
+    if (scrollScanTimer) clearTimeout(scrollScanTimer);
+    scrollScanTimer = setTimeout(() => {
+      const tv = document.querySelector('[data-qa="threads_view"]');
+      if (tv) scanThreadsPage(tv);
+    }, 300);
+  };
   scrollEl.addEventListener('scroll', threadsPageScrollHandler, { passive: true });
   updateFloatingButtons();
 }
 
 function teardownThreadsPageScroll() {
+  if (scrollScanTimer) {
+    clearTimeout(scrollScanTimer);
+    scrollScanTimer = null;
+  }
   if (threadsPageScrollEl && threadsPageScrollHandler) {
     threadsPageScrollEl.removeEventListener('scroll', threadsPageScrollHandler);
   }
@@ -381,7 +394,7 @@ function updateFloatingButtons() {
 async function persistAndUpdateUI(
   threadId: string,
   newLinks: CachedLink[],
-  container: Element,
+  container: Element | null,
   context: 'flexpane' | 'threads-page'
 ) {
   let cache = await getThreadLinks(threadId);
@@ -397,9 +410,17 @@ async function persistAndUpdateUI(
   }
 
   threadCacheMap.set(threadId, cache);
-  renderButtons(threadId, cache, container, context);
 
-  enrichGitHubPRs(threadId, cache, container, context);
+  if (container) {
+    renderButtons(threadId, cache, container, context);
+    enrichGitHubPRs(threadId, cache, container, context);
+  }
+
+  if (floatingContainer?.getAttribute('data-se-thread') === threadId) {
+    floatingContainer.remove();
+    floatingContainer = null;
+    updateFloatingButtons();
+  }
 }
 
 async function enrichGitHubPRs(

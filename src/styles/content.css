@@ -147,7 +147,17 @@
 }
 
 .p-threads_view_header .se-thread-link-wrapper {
-  margin-left: 8px;
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 0;
+  z-index: 10;
+}
+
+.p-threads_view_header {
+  position: relative;
+  z-index: 10;
 }
 
 .se-floating-thread-links {
@@ -161,8 +171,11 @@
 }
 
 .se-floating-thread-links .se-thread-link-btn {
-  background: rgba(70, 130, 200, 0.25);
-  backdrop-filter: blur(4px);
+  background: rgb(35, 50, 70);
+}
+
+.se-floating-thread-links .se-thread-link-btn--disabled {
+  background: rgb(30, 35, 40);
 }
 
 .se-thread-link-btn {
@@ -173,7 +186,7 @@
   margin: 0 2px;
   border: 1px solid rgba(100, 160, 220, 0.4);
   border-radius: 6px;
-  background: rgba(70, 130, 200, 0.15);
+  background: rgb(35, 50, 70);
   color: rgba(209, 210, 211, 0.95);
   font-size: 13px;
   font-weight: 600;
@@ -185,16 +198,16 @@
 }
 
 .se-thread-link-btn:hover:not(:disabled) {
-  background: rgba(70, 130, 200, 0.25);
+  background: rgb(45, 65, 90);
   border-color: rgba(100, 160, 220, 0.6);
   color: #fff;
 }
 
 .se-thread-link-btn--disabled {
-  opacity: 0.4;
   cursor: default;
-  background: transparent;
+  background: rgb(30, 35, 40);
   border-color: rgba(128, 128, 128, 0.2);
+  color: rgba(209, 210, 211, 0.4);
 }
 
 /* ── Thread Link Dropdown ────────────────────────────────────────── */
@@ -216,10 +229,6 @@
   margin-top: 4px;
 }
 
-.p-threads_view_header .se-thread-link-dropdown {
-  right: auto;
-  left: 0;
-}
 
 .se-link-group {
   padding: 0;
