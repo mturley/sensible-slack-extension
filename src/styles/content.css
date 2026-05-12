@@ -540,3 +540,188 @@
   color: rgba(209, 210, 211, 0.4);
   margin-top: 4px;
 }
+
+/* ── Light Mode Overrides ────────────────────────────────────────── */
+
+body:not(.sk-client-theme--dark) .se-toolbar {
+  background: #fff;
+  border-color: rgba(0, 0, 0, 0.15);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+body:not(.sk-client-theme--dark) .se-action-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+body:not(.sk-client-theme--dark) .se-tooltip {
+  background: #fff;
+  color: #1d1c1d;
+  border-color: rgba(0, 0, 0, 0.15);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+body:not(.sk-client-theme--dark) .se-toast {
+  background: #fff;
+  color: #1d1c1d;
+  border-color: rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+body:not(.sk-client-theme--dark) .se-mark-read-btn:disabled {
+  color: #999;
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+body:not(.sk-client-theme--dark) .se-thread-link-btn {
+  background: #f0f2f5;
+  color: #1d1c1d;
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+body:not(.sk-client-theme--dark) .se-thread-link-btn:hover:not(:disabled) {
+  background: #e4e7eb;
+  border-color: rgba(0, 0, 0, 0.25);
+  color: #1d1c1d;
+}
+
+body:not(.sk-client-theme--dark) .se-thread-link-btn.se-top-of-thread-btn {
+  background: #f8f8f8;
+  border-color: rgba(0, 0, 0, 0.12);
+  color: #616061;
+}
+
+body:not(.sk-client-theme--dark) .se-thread-link-btn.se-top-of-thread-btn:hover:not(:disabled) {
+  background: #ececec;
+  border-color: rgba(0, 0, 0, 0.2);
+  color: #1d1c1d;
+}
+
+body:not(.sk-client-theme--dark) .se-thread-link-btn--disabled {
+  background: #f5f5f5;
+  border-color: rgba(0, 0, 0, 0.08);
+  color: rgba(29, 28, 29, 0.4);
+}
+
+body:not(.sk-client-theme--dark) .se-floating-thread-links .se-thread-link-btn {
+  background: #f0f2f5;
+}
+
+body:not(.sk-client-theme--dark) .se-floating-thread-links .se-thread-link-btn--disabled {
+  background: #f5f5f5;
+}
+
+body:not(.sk-client-theme--dark) .se-top-tooltip {
+  background: #fff;
+  border-color: rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+body:not(.sk-client-theme--dark) .se-top-tooltip-author {
+  color: #1d1c1d;
+}
+
+body:not(.sk-client-theme--dark) .se-top-tooltip-text {
+  color: #616061;
+}
+
+body:not(.sk-client-theme--dark) .se-top-tooltip-footer {
+  color: rgba(29, 28, 29, 0.4);
+}
+
+body:not(.sk-client-theme--dark) .se-thread-link-dropdown {
+  background: #fff;
+  border-color: rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+body:not(.sk-client-theme--dark) .se-link-group + .se-link-group {
+  border-top-color: rgba(0, 0, 0, 0.12);
+}
+
+body:not(.sk-client-theme--dark) .se-link-item + .se-link-item {
+  border-top-color: rgba(0, 0, 0, 0.06);
+}
+
+body:not(.sk-client-theme--dark) .se-link-group-header {
+  color: rgba(29, 28, 29, 0.6);
+}
+
+body:not(.sk-client-theme--dark) .se-link-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+body:not(.sk-client-theme--dark) .se-link-item-content {
+  color: #1d1c1d;
+}
+
+body:not(.sk-client-theme--dark) .se-link-item:hover .se-link-item-content {
+  color: #1d1c1d;
+}
+
+body:not(.sk-client-theme--dark) .se-link-description {
+  color: rgba(29, 28, 29, 0.5);
+}
+
+body:not(.sk-client-theme--dark) .se-linked-thread-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+body:not(.sk-client-theme--dark) .se-linked-thread-item-content {
+  color: #1d1c1d;
+}
+
+body:not(.sk-client-theme--dark) .se-linked-thread-item:hover .se-linked-thread-item-content {
+  color: #1d1c1d;
+}
+
+body:not(.sk-client-theme--dark) .se-linked-thread-item + .se-linked-thread-item {
+  border-top-color: rgba(0, 0, 0, 0.06);
+}
+
+body:not(.sk-client-theme--dark) .se-linked-thread-author {
+  color: #1d1c1d;
+}
+
+body:not(.sk-client-theme--dark) .se-link-goto-btn {
+  color: rgba(29, 28, 29, 0.4);
+}
+
+body:not(.sk-client-theme--dark) .se-link-goto-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: #1d1c1d;
+}
+
+body:not(.sk-client-theme--dark) .se-link-copy-btn {
+  color: rgba(29, 28, 29, 0.4);
+}
+
+body:not(.sk-client-theme--dark) .se-link-copy-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: #1d1c1d;
+}
+
+body:not(.sk-client-theme--dark) .se-link-newtab-btn {
+  color: rgba(29, 28, 29, 0.4);
+}
+
+body:not(.sk-client-theme--dark) .se-link-newtab-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: #1d1c1d;
+}
+
+body:not(.sk-client-theme--dark) .se-linked-thread-preview {
+  color: #1d1c1d;
+}
+
+body:not(.sk-client-theme--dark) .se-linked-thread-footer {
+  color: rgba(29, 28, 29, 0.4);
+}
+
+@keyframes se-highlight-fade-light {
+  0% { background: rgba(70, 130, 200, 0.15); }
+  100% { background: transparent; }
+}
+
+body:not(.sk-client-theme--dark) .se-highlight-message {
+  animation: se-highlight-fade-light 2s ease-out;
+}
