@@ -197,6 +197,11 @@
   vertical-align: middle;
 }
 
+.se-btn-favicon {
+  vertical-align: middle;
+  border-radius: 2px;
+}
+
 .se-thread-link-btn:hover:not(:disabled) {
   background: rgb(45, 65, 90);
   border-color: rgba(100, 160, 220, 0.6);

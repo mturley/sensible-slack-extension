@@ -423,9 +423,13 @@ function updateFloatingButtons() {
           const btn = document.createElement('button');
           const hasLinks = externalLinks.length > 0;
           btn.className = `${BTN_EXTERNAL_CLASS} se-thread-link-btn${hasLinks ? '' : ' se-thread-link-btn--disabled'}`;
-          btn.textContent = hasLinks
-            ? `🔗 ${externalLinks.length} ${externalLinks.length === 1 ? 'link' : 'links'}`
-            : '🔗 No links';
+          btn.appendChild(buildButtonContent(
+            '🔗',
+            externalLinks.length,
+            hasLinks ? (externalLinks.length === 1 ? 'link' : 'links') : 'No links',
+            hasLinks,
+            externalLinks.map((l) => l.domain)
+          ));
           btn.type = 'button';
           btn.disabled = !hasLinks;
           if (hasLinks) {
@@ -802,7 +806,8 @@ function renderButtons(
         ? (externalLinks.length === 1 ? 'link' : 'links')
         : 'No links',
       '🔗', context, hasLinks,
-      () => showExternalLinksDropdown(threadId, externalLinks, headerEl)
+      () => showExternalLinksDropdown(threadId, externalLinks, headerEl),
+      externalLinks.map((l) => l.domain)
     );
   } else {
     const wrapper = headerEl.querySelector(`.se-thread-link-wrapper[data-se-thread="${threadId}"]`);
@@ -996,6 +1001,38 @@ function renderTopOfThreadButton(
   wrapper.insertBefore(btn, wrapper.firstChild);
 }
 
+function buildButtonContent(
+  icon: string,
+  count: number,
+  label: string,
+  enabled: boolean,
+  domains?: string[]
+): DocumentFragment {
+  const frag = document.createDocumentFragment();
+
+  if (enabled && domains && domains.length > 0) {
+    const uniqueDomains = [...new Set(domains)];
+    for (const domain of uniqueDomains) {
+      const img = document.createElement('img');
+      img.className = 'se-btn-favicon';
+      img.src = `https://www.google.com/s2/favicons?domain=${domain}&sz=16`;
+      img.width = 14;
+      img.height = 14;
+      img.alt = domain;
+      frag.appendChild(img);
+    }
+  }
+
+  const textNode = document.createTextNode(
+    enabled && domains && domains.length > 0
+      ? `${count} ${label}`
+      : enabled ? `${icon} ${count} ${label}` : `${icon} ${label}`
+  );
+  frag.appendChild(textNode);
+
+  return frag;
+}
+
 function renderOrUpdateButton(
   headerEl: Element,
   threadId: string,
@@ -1005,7 +1042,8 @@ function renderOrUpdateButton(
   icon: string,
   context: 'flexpane' | 'threads-page',
   enabled: boolean,
-  onClick: () => void
+  onClick: () => void,
+  domains?: string[]
 ) {
   let wrapper = headerEl.querySelector(`.se-thread-link-wrapper[data-se-thread="${threadId}"]`) as HTMLElement | null;
 
@@ -1032,10 +1070,10 @@ function renderOrUpdateButton(
   }
 
   let btn = wrapper.querySelector(`.${btnClass}`) as HTMLButtonElement | null;
-  const text = enabled ? `${icon} ${count} ${label}` : `${icon} ${label}`;
 
   if (btn) {
-    btn.textContent = text;
+    btn.innerHTML = '';
+    btn.appendChild(buildButtonContent(icon, count, label, enabled, domains));
     btn.disabled = !enabled;
     btn.classList.toggle('se-thread-link-btn--disabled', !enabled);
     return;
@@ -1043,7 +1081,7 @@ function renderOrUpdateButton(
 
   btn = document.createElement('button');
   btn.className = `${btnClass} se-thread-link-btn${enabled ? '' : ' se-thread-link-btn--disabled'}`;
-  btn.textContent = text;
+  btn.appendChild(buildButtonContent(icon, count, label, enabled, domains));
   btn.type = 'button';
   btn.disabled = !enabled;
   btn.addEventListener('click', (e) => {
