@@ -143,74 +143,56 @@ function findThunkCreator(
 }
 ```
 
-### Step 4: Locate the View Constructors and Navigate Function
+### Step 4: Locate the View Constructor and Navigate Function
 
-Two key modules are needed:
+Two key functions are needed (their minified export names change every deploy):
 
-- **viewMod** — Contains view constructor functions:
-  - `.UX({channelId, threadTs, replyTs, highlightRoot})` → Thread view object
-  - `.R9(channelId, ts, highlightTs)` → Channel-scroll-to-message view object
+- **threadViewFn** — Constructs a Thread view object: `({channelId, threadTs, replyTs, highlightRoot}) => viewObject`
+- **navigateFn** — Wraps a view object in a navigation thunk: `(viewObject) => reduxThunk`
 
-- **navMod** — Contains the navigate function:
-  - `.o(viewObject)` → Redux thunk that performs the navigation
+Both are found by tracing imports from the `"Opens the threads flexpane"` inner thunk. This thunk's source contains a nested call like `e((0,r.o)((0,i.UX)({channelId:a, threadTs:o})))` where `r.o` is the navigate function and `i.UX` is the view constructor.
 
-> **Note:** `.UX`, `.R9`, and `.o` are minified export names that will change across deploys. The code below finds these dynamically.
+> **Why this thunk?** The `"Handle navigation click from attachment footer"` thunk also imports a navigate function, but it imports many other modules too. Probing all its imports for "returns a function when called with a view object" produces false positives — other thunk creators pass the same probe. The inner `"Opens the threads flexpane"` thunk has fewer imports and directly uses both functions we need in a single parseable call expression.
 
-**Finding viewMod** — identified by containing `"dangerouslyOverrideRouting"` (a param name unique to Slack's thread view constructor):
+> **Why not `showThreadOrRefresh`?** The `"Open the thread in the flexpane or refresh it if already open"` thunk destructures `highlightTs` from its params but never passes it through to the inner thunk in the non-tile code path. It drops `replyTs` silently, so threads always open without scrolling to a specific reply.
 
 ```typescript
-function getViewMod(wr: WebpackRequire) {
-  const modules = wr.m;
-  for (const id of Object.keys(modules)) {
-    const src = modules[id].toString();
-    if (src.includes("dangerouslyOverrideRouting") && src.includes("highlightRoot")) {
-      const mod = wr(id);
-      // Verify by probing exports
-      for (const key of Object.keys(mod)) {
-        if (typeof mod[key] === "function") {
-          try {
-            const result = mod[key]({ channelId: "_", threadTs: "_" });
-            if (result?.params?.dangerouslyOverrideRouting !== undefined) {
-              return mod;
-            }
-          } catch (_e) { /* continue */ }
-        }
-      }
+function discoverNavFunctions(wr: WebpackRequire) {
+  const desc = "Opens the threads flexpane";
+
+  for (const id of Object.keys(wr.m)) {
+    const src = wr.m[id].toString();
+    if (!src.includes(desc)) continue;
+
+    // Parse the nested call: e((0,NAV_VAR.NAV_KEY)((0,VIEW_VAR.VIEW_KEY)({...})))
+    const nestedMatch = src.match(/e\(\(0,(\w+)\.(\w+)\)\(\(0,(\w+)\.(\w+)\)\(\{/);
+    if (!nestedMatch) continue;
+
+    const [, navVar, navKey, viewVar, viewKey] = nestedMatch;
+
+    // Map local variables to their import hex IDs
+    const navImport = src.match(new RegExp(`(?:^|,)${navVar}=a\\((0x[0-9a-f]+)\\)`));
+    const viewImport = src.match(new RegExp(`(?:^|,)${viewVar}=a\\((0x[0-9a-f]+)\\)`));
+    if (!navImport || !viewImport) continue;
+
+    const navModId = parseInt(navImport[1], 16).toString();
+    const viewModId = parseInt(viewImport[1], 16).toString();
+
+    const navMod = wr(navModId);
+    const viewMod = wr(viewModId);
+
+    if (typeof navMod?.[navKey] === "function" && typeof viewMod?.[viewKey] === "function") {
+      return {
+        navigateFn: navMod[navKey],
+        threadViewFn: viewMod[viewKey],
+      };
     }
   }
-  throw new Error("View constructor module not found");
+  throw new Error("Navigate/view functions not found");
 }
 ```
 
-**Finding navMod** — identified by tracing imports from the `"Handle navigation click from attachment footer"` thunk, which imports the navigate function:
-
-```typescript
-function getNavMod(wr: WebpackRequire) {
-  const attachmentFooterDesc = "Handle navigation click from attachment footer";
-  const modules = wr.m;
-  for (const id of Object.keys(modules)) {
-    const src = modules[id].toString();
-    if (src.includes(attachmentFooterDesc)) {
-      // Parse the imported module hex IDs from the source
-      const importMatches = [...src.matchAll(/a\((0x[0-9a-f]+)\)/g)];
-      for (const match of importMatches) {
-        const hexId = parseInt(match[1], 16).toString();
-        try {
-          const candidate = wr(hexId);
-          if (candidate && typeof candidate.o === "function") {
-            const testView = { id: "test", viewType: "Channel" };
-            const result = candidate.o(testView);
-            if (typeof result === "function") {
-              return candidate;
-            }
-          }
-        } catch (_e) { /* continue */ }
-      }
-    }
-  }
-  throw new Error("Navigate module not found");
-}
-```
+> **Note on multiple matches:** The string `"dangerouslyOverrideRouting"` appears in ~4 modules. Only the large view constructor module (~22k chars with 100+ exports) has the actual functions. The others reference the string in different contexts. The approach above avoids this ambiguity entirely by tracing from the thunk that uses both functions.
 
 ---
 
@@ -228,14 +210,17 @@ interface SlackNavOptions {
 function createSlackNav() {
   let wr: WebpackRequire | null = null;
   let wsStore: ReduxStore | null = null;
-  let viewMod: any = null;
-  let navMod: any = null;
+  let navigateFn: Function | null = null;
+  let threadViewFn: Function | null = null;
 
   function ensureInitialized() {
     if (!wr) wr = getWebpackRequire();
     if (!wsStore) wsStore = getWorkspaceStore();
-    if (!viewMod) viewMod = getViewMod(wr);
-    if (!navMod) navMod = getNavMod(wr);
+    if (!navigateFn || !threadViewFn) {
+      const fns = discoverNavFunctions(wr);
+      navigateFn = fns.navigateFn;
+      threadViewFn = fns.threadViewFn;
+    }
   }
 
   return {
@@ -253,20 +238,21 @@ Opens the thread flexpane (right panel) showing the thread starting from the roo
 openThread({ channelId, threadTs, replyTs, highlightRoot = true }) {
   ensureInitialized();
 
-  // UX constructs a Thread view object.
-  // When replyTs is provided, the thread panel scrolls to that reply
-  // and the message gets a brief highlight animation (yellow flash).
-  const threadView = viewMod.UX({
+  // threadViewFn constructs a Thread view object.
+  // replyTs controls which message to scroll to and highlight.
+  // Default to threadTs so root messages scroll to top instead of
+  // preserving stale scroll state from a previous view.
+  const threadView = threadViewFn({
     channelId,
     threadTs,
-    replyTs,
+    replyTs: replyTs || threadTs,
     highlightRoot,
   });
 
-  // navMod.o wraps the view in a navigation thunk.
+  // navigateFn wraps the view in a navigation thunk.
   // Dispatching to the workspace store triggers the full navigation flow:
   // data fetching, view transition, history.pushState, and React re-render.
-  wsStore.dispatch(navMod.o(threadView));
+  wsStore.dispatch(navigateFn(threadView));
 }
 ```
 
@@ -282,24 +268,24 @@ nav.openThread({
   replyTs: "1776162537.065889",
 });
 
-// Open a thread panel to a root message (shows root + all replies):
+// Open a thread panel to a root message (scrolls to top, highlights root):
+nav.openThread({
+  channelId: "C05SMJ09DD2",
+  threadTs: "1746622698.699349",
+});
+
+// Explicitly highlight a specific reply as the root:
 nav.openThread({
   channelId: "C05SMJ09DD2",
   threadTs: "1746622698.699349",
   replyTs: "1746622698.699349",
   highlightRoot: true,
 });
-
-// Open a thread panel without highlighting a specific reply:
-nav.openThread({
-  channelId: "C05SMJ09DD2",
-  threadTs: "1746622698.699349",
-});
 ```
 
-### `jumpToMessage` — Navigate the Channel View to a Message
+### `jumpToMessage` — Open Thread Panel at a Message
 
-Scrolls the main channel pane to a specific message and highlights it. Does **not** open the thread panel. This is what Slack's "View message" link does.
+Opens the thread panel scrolled to the target message. For messages that are thread roots, this opens the thread at the top. This is useful for "scroll to message" functionality.
 
 ```typescript
 jumpToMessage({ channelId, messageTs }) {
@@ -308,10 +294,14 @@ jumpToMessage({ channelId, messageTs }) {
   const ts = messageTs || threadTs || replyTs;
   if (!ts) throw new Error("messageTs is required");
 
-  // R9 constructs a Channel view object with startTs and highlightTs.
-  const channelView = viewMod.R9(channelId, ts, ts);
+  const threadView = threadViewFn({
+    channelId,
+    threadTs: ts,
+    replyTs: ts,
+    highlightRoot: true,
+  });
 
-  wsStore.dispatch(navMod.o(channelView));
+  wsStore.dispatch(navigateFn(threadView));
 }
 ```
 
@@ -340,6 +330,20 @@ The extension's content script must run in the **MAIN world** (not the isolated 
     "run_at": "document_idle"
   }]
 }
+```
+
+**Cross-world communication:** MAIN and ISOLATED world scripts communicate via `CustomEvent` on the document. In MV3, `CustomEvent.detail` must be a JSON string — structured objects are silently dropped as `null` when crossing the world boundary:
+
+```typescript
+// ISOLATED world → MAIN world
+document.dispatchEvent(new CustomEvent("se-spa-nav-request", {
+  detail: JSON.stringify({ action: "openThread", channelId, threadTs }),
+}));
+
+// MAIN world listener
+document.addEventListener("se-spa-nav-request", (e: CustomEvent) => {
+  const detail = JSON.parse(e.detail);  // must parse, e.detail is a string
+});
 ```
 
 ---
@@ -385,27 +389,33 @@ function parseSlackUrl(url: string): SlackNavOptions | null {
 
 ## Alternative Approach: `showThreadOrRefresh` Thunk
 
-There is also a higher-level thunk that can be used instead of the view constructor approach. It takes `{ channelId, threadTs, highlightTs, requestFocus, shouldOpenInTile }` and handles the case where the thread panel is already open to the same thread.
+There is a higher-level thunk `"Open the thread in the flexpane or refresh it if already open"` that can open threads. It takes `{ channelId, threadTs, highlightTs, requestFocus, shouldOpenInTile }`.
 
-The view constructor approach (`viewMod.UX` + `navMod.o`) is **preferred** because:
-1. It gives us access to both thread panel AND channel-jump navigation
-2. It sets both `params.replyTs` and `uiState.highlightTs` correctly
-3. It's what Slack's own "View reply" click handler uses
+**This thunk is NOT recommended** because it silently drops `highlightTs`. The thunk destructures `highlightTs` from the params object, but in the non-tile code path it spreads only the remaining params (`...h`) to the inner thunk — and since `highlightTs` was already destructured out, it's excluded from the spread. The result: threads open without scrolling to or highlighting the target reply.
 
-The `showThreadOrRefresh` thunk is simpler but only handles thread panel opens:
+The view constructor approach (`threadViewFn` + `navigateFn`) is **required** for reply highlighting because:
+1. It sets both `params.replyTs` and `uiState.highlightTs` in the view object
+2. These fields are what Slack's rendering code reads to scroll and highlight
+3. It's the same code path that Slack's own "View reply" click handler uses
 
 ```typescript
-const showThreadOrRefresh = findThunkCreator(
-  wr,
-  "Open the thread in the flexpane or refresh it if already open",
-);
+// DON'T use showThreadOrRefresh — highlightTs is silently dropped:
 wsStore.dispatch(showThreadOrRefresh({
   channelId: "C05SMJ09DD2",
   threadTs: "1776143970.171229",
-  highlightTs: "1776162476.804769",
+  highlightTs: "1776162476.804769",  // ← this gets ignored!
   requestFocus: true,
   shouldOpenInTile: false,
 }));
+
+// DO use threadViewFn + navigateFn — replyTs is correctly propagated:
+const view = threadViewFn({
+  channelId: "C05SMJ09DD2",
+  threadTs: "1776143970.171229",
+  replyTs: "1776162476.804769",      // ← this works
+  highlightRoot: true,
+});
+wsStore.dispatch(navigateFn(view));
 ```
 
 ---
@@ -431,11 +441,21 @@ wsStore.dispatch(showThreadOrRefresh({
 ### How the API handles this
 
 1. Searching module source code for stable description strings
-2. Probing exports by calling them with test args and checking results
+2. Parsing source code to trace import variable names to hex module IDs
 3. Using `Object.keys()` to find React fiber keys by prefix
 4. Never hardcoding module IDs or export keys
 
 Performance: searching 13,625 modules by `toString().includes()` takes **~26ms**. Results are cached after first lookup.
+
+### Pitfalls discovered during implementation
+
+**Multiple modules match the same search strings.** The string `"dangerouslyOverrideRouting"` appears in ~4 modules. Only one is the view constructor module. Probing exports helps disambiguate, but it's safer to trace from a thunk that directly imports the module you need (as `discoverNavFunctions` does).
+
+**Probing imports produces false positives.** The `"Handle navigation click from attachment footer"` thunk imports many modules. Checking "does this export return a function when called with a view object?" matches other thunk creators too, not just the navigate function. The fix: parse the thunk source to find which variable name is used in the navigate call, then map that variable to its specific import.
+
+**`CustomEvent.detail` does not cross the MAIN/ISOLATED world boundary in MV3.** Structured objects passed as `detail` arrive as `null` in the other world. Always `JSON.stringify` the detail and `JSON.parse` on the receiving end. This applies to both Chrome and Firefox.
+
+**`replyTs` must be set for scroll-to-message behavior.** If `replyTs` is omitted from the view constructor call, the thread panel opens but does not scroll — it preserves whatever scroll position was last used for that thread. Always default `replyTs` to `threadTs` when navigating to a thread root to ensure scroll-to-top.
 
 ---
 
@@ -452,6 +472,12 @@ Performance: searching 13,625 modules by `toString().includes()` takes **~26ms**
 
 4. **Calling React fiber `onClick` handlers with synthetic events:**
    WORKS but requires the target element to be rendered in the DOM. Not viable for navigating to channels/threads not visible in the sidebar. This was our stepping stone to discovering the thunk-based approach.
+
+5. **Probing all imports of the attachment footer thunk for the navigate function:**
+   The attachment footer thunk imports ~20 modules. Probing each with `candidate[key]({id: "test", viewType: "Channel"})` and checking "returns a function" matches the wrong module in Firefox — another thunk creator passes the same test. Produces "We're unable to open this link" errors. Fixed by parsing the source to trace which specific import variable is used in the navigate call.
+
+6. **Using `showThreadOrRefresh` for reply-specific navigation:**
+   The thunk destructures `highlightTs` from params but never passes it through to the inner thunk's view constructor call. Threads open but don't scroll to the target reply.
 
 ---
 
