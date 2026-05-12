@@ -8,11 +8,8 @@ export default defineContentScript({
 
     let wr: WebpackRequire | null = null;
     let wsStore: any = null;
-    let viewMod: any = null;
-    let navMod: any = null;
-    let threadViewKey: string | null = null;
-    let channelViewKey: string | null = null;
-    let navigateKey: string | null = null;
+    let navigateFn: ((view: any) => any) | null = null;
+    let threadViewFn: ((opts: any) => any) | null = null;
 
     function getWebpackRequire(): WebpackRequire {
       if (wr) return wr;
@@ -67,115 +64,96 @@ export default defineContentScript({
       throw new Error('Workspace store not found');
     }
 
-    function getViewMod() {
-      if (viewMod && threadViewKey && channelViewKey) return viewMod;
+    // Find the navigate function and thread view constructor by tracing imports
+    // from the "Opens the threads flexpane" thunk, which directly imports both.
+    // This thunk's source contains calls like:
+    //   e((0,r.o)((0,i.UX)({channelId:a, threadTs:o})))
+    // where r.o is the navigate function and i.UX is the thread view constructor.
+    function discoverNavFunctions() {
+      if (navigateFn && threadViewFn) return;
 
       const r = getWebpackRequire();
-      const modules = r.m;
-      for (const id of Object.keys(modules)) {
-        const src = modules[id].toString();
-        if (!src.includes('dangerouslyOverrideRouting') || !src.includes('highlightRoot')) continue;
+      const desc = 'Opens the threads flexpane';
 
-        const mod = r(id);
-        let tvKey: string | null = null;
-        let cvKey: string | null = null;
-
-        for (const key of Object.keys(mod)) {
-          if (typeof mod[key] !== 'function') continue;
-          try {
-            const result = mod[key]({ channelId: '_test_', threadTs: '_test_' });
-            if (result?.params?.dangerouslyOverrideRouting !== undefined) {
-              tvKey = key;
-            }
-          } catch (_e) { /* continue */ }
-
-          if (!cvKey) {
-            try {
-              const result = mod[key]('_test_', '_test_', '_test_');
-              if (result?.viewType === 'Channel' && result?.params?.startTs) {
-                cvKey = key;
-              }
-            } catch (_e) { /* continue */ }
-          }
-        }
-
-        if (tvKey) {
-          viewMod = mod;
-          threadViewKey = tvKey;
-          channelViewKey = cvKey;
-          return viewMod;
-        }
-      }
-      throw new Error('View constructor module not found');
-    }
-
-    function getNavMod() {
-      if (navMod && navigateKey) return navMod;
-
-      const r = getWebpackRequire();
-      const modules = r.m;
-      const desc = 'Handle navigation click from attachment footer';
-
-      for (const id of Object.keys(modules)) {
-        const src = modules[id].toString();
+      for (const id of Object.keys(r.m)) {
+        const src = r.m[id].toString();
         if (!src.includes(desc)) continue;
 
-        const importMatches = [...src.matchAll(/a\((0x[0-9a-f]+)\)/g)];
-        for (const match of importMatches) {
-          const hexId = parseInt(match[1], 16).toString();
-          try {
-            const candidate = r(hexId);
-            if (!candidate) continue;
-            for (const key of Object.keys(candidate)) {
-              if (typeof candidate[key] !== 'function') continue;
-              try {
-                const result = candidate[key]({ id: '_test_', viewType: 'Channel' });
-                if (typeof result === 'function') {
-                  navMod = candidate;
-                  navigateKey = key;
-                  return navMod;
-                }
-              } catch (_e) { /* continue */ }
-            }
-          } catch (_e) { /* continue */ }
-        }
+        // Find the navigate call pattern: e((0,VAR1.KEY1)((0,VAR2.KEY2)({...})))
+        // This matches the nested call where navigate wraps the view constructor
+        const nestedMatch = src.match(
+          /e\(\(0,(\w+)\.(\w+)\)\(\(0,(\w+)\.(\w+)\)\(\{/,
+        );
+        if (!nestedMatch) continue;
+
+        const navVar = nestedMatch[1];
+        const navKey = nestedMatch[2];
+        const viewVar = nestedMatch[3];
+        const viewKey = nestedMatch[4];
+
+        // Map local variables to their import hex IDs
+        const navImport = src.match(new RegExp(`(?:^|,)${navVar}=a\\((0x[0-9a-f]+)\\)`));
+        const viewImport = src.match(new RegExp(`(?:^|,)${viewVar}=a\\((0x[0-9a-f]+)\\)`));
+        if (!navImport || !viewImport) continue;
+
+        const navModId = parseInt(navImport[1], 16).toString();
+        const viewModId = parseInt(viewImport[1], 16).toString();
+
+        try {
+          const navMod = r(navModId);
+          const viewMod = r(viewModId);
+          if (typeof navMod?.[navKey] === 'function' && typeof viewMod?.[viewKey] === 'function') {
+            navigateFn = navMod[navKey];
+            threadViewFn = viewMod[viewKey];
+            return;
+          }
+        } catch (_e) { /* continue searching */ }
       }
-      throw new Error('Navigate module not found');
+      throw new Error('Navigate/view functions not found');
     }
 
     function handleOpenThread(detail: any) {
-      const vm = getViewMod();
-      const nm = getNavMod();
+      discoverNavFunctions();
+      if (!navigateFn || !threadViewFn) throw new Error('Navigation functions not available');
       const store = getWorkspaceStore();
+      if (!store) throw new Error('Workspace store not available');
 
-      const threadView = vm[threadViewKey!]({
+      const threadView = threadViewFn({
         channelId: detail.channelId,
         threadTs: detail.threadTs,
         replyTs: detail.replyTs,
         highlightRoot: detail.highlightRoot ?? true,
       });
 
-      store.dispatch(nm[navigateKey!](threadView));
+      store.dispatch(navigateFn(threadView));
     }
 
     function handleJumpToMessage(detail: any) {
-      const vm = getViewMod();
-      const nm = getNavMod();
+      discoverNavFunctions();
+      if (!navigateFn || !threadViewFn) throw new Error('Navigation functions not available');
       const store = getWorkspaceStore();
+      if (!store) throw new Error('Workspace store not available');
 
       const ts = detail.messageTs || detail.threadTs || detail.replyTs;
       if (!ts) throw new Error('messageTs, threadTs, or replyTs is required');
 
-      if (channelViewKey) {
-        const channelView = vm[channelViewKey](detail.channelId, ts, ts);
-        store.dispatch(nm[navigateKey!](channelView));
-      } else {
-        throw new Error('Channel view constructor not found');
-      }
+      const threadView = threadViewFn({
+        channelId: detail.channelId,
+        threadTs: ts,
+        replyTs: ts,
+        highlightRoot: true,
+      });
+
+      store.dispatch(navigateFn(threadView));
     }
 
     document.addEventListener('se-spa-nav-request', ((e: CustomEvent) => {
-      const detail = e.detail;
+      let detail: any;
+      try {
+        detail = typeof e.detail === 'string' ? JSON.parse(e.detail) : e.detail;
+      } catch (_e) {
+        return;
+      }
       const id = detail?.id;
       if (!id) return;
 
@@ -188,17 +166,14 @@ export default defineContentScript({
           throw new Error(`Unknown action: ${detail.action}`);
         }
         document.dispatchEvent(new CustomEvent('se-spa-nav-result', {
-          detail: { id, success: true },
+          detail: JSON.stringify({ id, success: true }),
         }));
       } catch (err: any) {
-        viewMod = null;
-        navMod = null;
-        threadViewKey = null;
-        channelViewKey = null;
-        navigateKey = null;
+        navigateFn = null;
+        threadViewFn = null;
         wsStore = null;
         document.dispatchEvent(new CustomEvent('se-spa-nav-result', {
-          detail: { id, success: false, error: err?.message || String(err) },
+          detail: JSON.stringify({ id, success: false, error: err?.message || String(err) }),
         }));
       }
     }) as EventListener);

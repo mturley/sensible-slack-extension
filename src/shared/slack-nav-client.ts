@@ -24,18 +24,24 @@ export function requestSpaNav(
     const id = `se-nav-${++requestCounter}-${Date.now()}`;
     let settled = false;
 
-    const onResult = ((e: CustomEvent<SpaNavResult>) => {
-      if (e.detail?.id !== id) return;
+    const onResult = ((e: CustomEvent) => {
+      let detail: SpaNavResult;
+      try {
+        detail = typeof e.detail === 'string' ? JSON.parse(e.detail) : e.detail;
+      } catch (_e) {
+        return;
+      }
+      if (detail?.id !== id) return;
       settled = true;
       document.removeEventListener('se-spa-nav-result', onResult as EventListener);
-      resolve(e.detail);
+      resolve(detail);
     }) as EventListener;
 
     document.addEventListener('se-spa-nav-result', onResult);
 
     document.dispatchEvent(
       new CustomEvent('se-spa-nav-request', {
-        detail: { ...opts, id },
+        detail: JSON.stringify({ ...opts, id }),
       }),
     );
 
