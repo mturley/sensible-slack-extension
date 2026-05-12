@@ -121,7 +121,7 @@ export default defineContentScript({
       const threadView = threadViewFn({
         channelId: detail.channelId,
         threadTs: detail.threadTs,
-        replyTs: detail.replyTs,
+        replyTs: detail.replyTs || detail.threadTs,
         highlightRoot: detail.highlightRoot ?? true,
       });
 
