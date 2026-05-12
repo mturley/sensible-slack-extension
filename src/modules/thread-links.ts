@@ -1001,6 +1001,19 @@ function renderTopOfThreadButton(
   wrapper.insertBefore(btn, wrapper.firstChild);
 }
 
+function domainPriority(d: string): number {
+  if (d.includes('atlassian.net')) return 0;
+  if (d.includes('github.com')) return 1;
+  return 2;
+}
+
+function domainSortCompare(a: string, b: string): number {
+  const pa = domainPriority(a);
+  const pb = domainPriority(b);
+  if (pa !== pb) return pa - pb;
+  return a.localeCompare(b);
+}
+
 function buildButtonContent(
   icon: string,
   count: number,
@@ -1011,11 +1024,16 @@ function buildButtonContent(
   const frag = document.createDocumentFragment();
 
   if (enabled && domains && domains.length > 0) {
-    const uniqueDomains = [...new Set(domains)];
+    const isDark = document.body.classList.contains('sk-client-theme--dark');
+    const uniqueDomains = [...new Set(domains)].sort(domainSortCompare);
     for (const domain of uniqueDomains) {
       const img = document.createElement('img');
       img.className = 'se-btn-favicon';
-      img.src = `https://www.google.com/s2/favicons?domain=${domain}&sz=16`;
+      if (domain === 'github.com' && isDark) {
+        img.src = 'https://github.githubassets.com/favicons/favicon-dark.svg';
+      } else {
+        img.src = `https://www.google.com/s2/favicons?domain=${domain}&sz=16`;
+      }
       img.width = 14;
       img.height = 14;
       img.alt = domain;
@@ -1413,17 +1431,9 @@ function showExternalLinksDropdown(
     grouped.set(link.domain, group);
   }
 
-  const sortedDomains = Array.from(grouped.keys()).sort((a, b) => {
-    const priority = (d: string) => {
-      if (d.includes('atlassian.net')) return 0;
-      if (d.includes('github.com')) return 1;
-      return 2;
-    };
-    const pa = priority(a);
-    const pb = priority(b);
-    if (pa !== pb) return pa - pb;
-    return a.localeCompare(b);
-  });
+  const sortedDomains = Array.from(grouped.keys()).sort(domainSortCompare);
+
+  const isDark = document.body.classList.contains('sk-client-theme--dark');
 
   for (const domain of sortedDomains) {
     const groupEl = document.createElement('div');
@@ -1434,7 +1444,11 @@ function showExternalLinksDropdown(
 
     const favicon = document.createElement('img');
     favicon.className = 'se-link-favicon';
-    favicon.src = `https://www.google.com/s2/favicons?domain=${domain}&sz=16`;
+    if (domain === 'github.com' && isDark) {
+      favicon.src = 'https://github.githubassets.com/favicons/favicon-dark.svg';
+    } else {
+      favicon.src = `https://www.google.com/s2/favicons?domain=${domain}&sz=16`;
+    }
     favicon.width = 16;
     favicon.height = 16;
     favicon.alt = '';
