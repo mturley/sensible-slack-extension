@@ -391,6 +391,27 @@
 
 /* ── Linked Thread Items ─────────────────────────────────────────── */
 
+.se-linked-threads-section-header {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(209, 210, 211, 0.5);
+  padding: 8px 12px 4px;
+}
+
+.se-linked-threads-section-header + .se-linked-thread-item {
+  border-top: none;
+}
+
+.se-linked-threads-section-header + .se-linked-threads-section-header {
+  border-top: 2px solid rgba(128, 128, 128, 0.25);
+}
+
+.se-linked-thread-item + .se-linked-threads-section-header {
+  border-top: 2px solid rgba(128, 128, 128, 0.25);
+}
+
 .se-linked-thread-item {
   display: flex;
   align-items: center;
@@ -425,6 +446,24 @@
   font-weight: 600;
   color: rgba(209, 210, 211, 0.8);
   margin-bottom: 2px;
+}
+
+.se-linked-thread-reply-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: rgba(209, 210, 211, 0.4);
+  margin-bottom: 2px;
+}
+
+.se-linked-thread-context {
+  font-size: 11px;
+  color: rgba(209, 210, 211, 0.4);
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .se-link-goto-btn {
@@ -667,6 +706,15 @@ body:not(.sk-client-theme--dark) .se-link-description {
   color: rgba(29, 28, 29, 0.5);
 }
 
+body:not(.sk-client-theme--dark) .se-linked-threads-section-header {
+  color: rgba(29, 28, 29, 0.5);
+}
+
+body:not(.sk-client-theme--dark) .se-linked-thread-item + .se-linked-threads-section-header,
+body:not(.sk-client-theme--dark) .se-linked-threads-section-header + .se-linked-threads-section-header {
+  border-top-color: rgba(0, 0, 0, 0.12);
+}
+
 body:not(.sk-client-theme--dark) .se-linked-thread-item:hover {
   background: rgba(0, 0, 0, 0.04);
 }
@@ -685,6 +733,14 @@ body:not(.sk-client-theme--dark) .se-linked-thread-item + .se-linked-thread-item
 
 body:not(.sk-client-theme--dark) .se-linked-thread-author {
   color: #1d1c1d;
+}
+
+body:not(.sk-client-theme--dark) .se-linked-thread-reply-label {
+  color: rgba(29, 28, 29, 0.4);
+}
+
+body:not(.sk-client-theme--dark) .se-linked-thread-context {
+  color: rgba(29, 28, 29, 0.4);
 }
 
 body:not(.sk-client-theme--dark) .se-link-goto-btn {

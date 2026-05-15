@@ -1,5 +1,5 @@
 import { storage } from 'wxt/utils/storage';
-import type { CachedLink, ThreadLinkCache, ThreadLinksIndex } from '../types';
+import type { Backlink, CachedLink, ThreadLinkCache, ThreadLinksIndex } from '../types';
 import {
   STORAGE_KEY_THREAD_LINKS_PREFIX,
   STORAGE_KEY_THREAD_LINKS_INDEX,
@@ -63,6 +63,67 @@ export function mergeLinks(
   return Array.from(byUrl.values());
 }
 
+export async function addBacklinksForThread(
+  sourceCache: ThreadLinkCache,
+  buildSourceUrl: (sourceMsgTs?: string) => string
+): Promise<string[]> {
+  const linksByTarget = new Map<string, CachedLink>();
+  for (const link of sourceCache.links) {
+    if (link.threadId && link.threadId !== sourceCache.threadId) {
+      if (!linksByTarget.has(link.threadId)) {
+        linksByTarget.set(link.threadId, link);
+      }
+    }
+  }
+
+  const updatedTargets: string[] = [];
+
+  for (const [targetId, link] of linksByTarget) {
+    let targetCache = await getThreadLinks(targetId);
+    if (!targetCache) {
+      targetCache = { threadId: targetId, links: [], processedMsgTimestamps: [], lastUpdated: Date.now() };
+    }
+
+    const backlinks = targetCache.backlinks ?? [];
+    const existing = backlinks.find((b) => b.sourceThreadId === sourceCache.threadId);
+
+    if (existing) {
+      let changed = false;
+      if (sourceCache.rootInfo && !existing.rootInfo?.text) {
+        existing.rootInfo = sourceCache.rootInfo;
+        changed = true;
+      }
+      if (link.sourceMsgAuthor && !existing.linkAuthorName) {
+        existing.linkAuthorName = link.sourceMsgAuthor;
+        existing.linkPreview = link.sourceMsgText;
+        existing.linkChannelName = link.channelName ?? sourceCache.rootInfo?.channelName;
+        changed = true;
+      }
+      if (changed) {
+        targetCache.backlinks = backlinks;
+        await saveThreadLinks(targetCache);
+        updatedTargets.push(targetId);
+      }
+    } else {
+      const backlink: Backlink = {
+        sourceThreadId: sourceCache.threadId,
+        sourceUrl: buildSourceUrl(link.sourceMsgTs),
+        rootInfo: sourceCache.rootInfo,
+        linkAuthorName: link.sourceMsgAuthor,
+        linkPreview: link.sourceMsgText,
+        linkChannelName: link.channelName ?? sourceCache.rootInfo?.channelName,
+        firstSeenAt: Date.now(),
+      };
+      backlinks.push(backlink);
+      targetCache.backlinks = backlinks;
+      await saveThreadLinks(targetCache);
+      updatedTargets.push(targetId);
+    }
+  }
+
+  return updatedTargets;
+}
+
 export async function getCacheStats(): Promise<{
   linkCount: number;
   threadCount: number;
@@ -105,6 +166,18 @@ export async function purgeCache(
       }
     }
   }
+  const remainingIds = new Set(Object.keys(index));
+  for (const id of remainingIds) {
+    const cache = await storage.getItem<ThreadLinkCache>(threadKey(id));
+    if (cache?.backlinks && cache.backlinks.length > 0) {
+      const filtered = cache.backlinks.filter((b) => remainingIds.has(b.sourceThreadId));
+      if (filtered.length !== cache.backlinks.length) {
+        cache.backlinks = filtered;
+        await storage.setItem(threadKey(id), cache);
+      }
+    }
+  }
+
   await setIndex(index);
 }
 

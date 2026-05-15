@@ -6,9 +6,9 @@ import {
   GITHUB_PR_ISSUE_URL_PATTERN,
   GITHUB_PR_URL_FULL_PATTERN,
 } from '../shared/constants';
-import { getThreadLinks, saveThreadLinks, mergeLinks } from '../shared/link-cache';
+import { getThreadLinks, saveThreadLinks, mergeLinks, addBacklinksForThread } from '../shared/link-cache';
 import { requestSpaNav, parseSlackThreadUrl } from '../shared/slack-nav-client';
-import type { ExtensionSettings, CachedLink, ThreadLinkCache, ThreadRootInfo } from '../types';
+import type { Backlink, ExtensionSettings, CachedLink, ThreadLinkCache, ThreadRootInfo } from '../types';
 
 let active = false;
 let disconnectObserver: (() => void) | null = null;
@@ -442,18 +442,20 @@ function updateFloatingButtons() {
         }
 
         if (currentSettings.threadLinkedThreads) {
+          const backlinks = cache.backlinks ?? [];
+          const totalCount = threadLinks.length + backlinks.length;
           const btn = document.createElement('button');
-          const hasLinks = threadLinks.length > 0;
+          const hasLinks = totalCount > 0;
           btn.className = `${BTN_THREADS_CLASS} se-thread-link-btn${hasLinks ? '' : ' se-thread-link-btn--disabled'}`;
           btn.textContent = hasLinks
-            ? `💬 ${threadLinks.length} ${threadLinks.length === 1 ? 'linked thread' : 'linked threads'}`
+            ? `💬 ${totalCount} ${totalCount === 1 ? 'linked thread' : 'linked threads'}`
             : '💬 No linked threads';
           btn.type = 'button';
           btn.disabled = !hasLinks;
           if (hasLinks) {
             btn.addEventListener('click', (e) => {
               e.stopPropagation();
-              if (openDropdown && openDropdownTrigger === btn) { closeDropdownIfOpen(); } else { closeDropdownIfOpen(); openDropdownTrigger = btn; showLinkedThreadsDropdown(activeThreadId!, threadLinks, floatingContainer!); }
+              if (openDropdown && openDropdownTrigger === btn) { closeDropdownIfOpen(); } else { closeDropdownIfOpen(); openDropdownTrigger = btn; showLinkedThreadsDropdown(activeThreadId!, threadLinks, backlinks, floatingContainer!); }
             });
           }
           floatingContainer.appendChild(btn);
@@ -496,6 +498,29 @@ async function persistAndUpdateUI(
 
   if (dirty) {
     await saveThreadLinks(cache);
+
+    const [ch, ts] = threadId.split(':');
+    const buildSourceUrl = (sourceMsgTs?: string) => {
+      const msgTs = sourceMsgTs ?? ts;
+      const pTs = msgTs.replace('.', '');
+      const base = `${window.location.origin}/archives/${ch}/p${pTs}`;
+      if (sourceMsgTs && sourceMsgTs !== ts) {
+        return `${base}?thread_ts=${ts}`;
+      }
+      return base;
+    };
+    const updatedTargets = await addBacklinksForThread(cache, buildSourceUrl);
+    for (const targetId of updatedTargets) {
+      const refreshed = await getThreadLinks(targetId);
+      if (refreshed) {
+        threadCacheMap.set(targetId, refreshed);
+        const wrapper = document.querySelector(`.se-thread-link-wrapper[data-se-thread="${targetId}"]`);
+        if (wrapper?.parentElement) {
+          const ctx = wrapper.closest('[data-qa="threads_flexpane"]') ? 'flexpane' as const : 'threads-page' as const;
+          renderButtons(targetId, refreshed, wrapper.parentElement, ctx);
+        }
+      }
+    }
   }
 
   threadCacheMap.set(threadId, cache);
@@ -594,6 +619,9 @@ function extractLinksFromMessage(msgEl: Element): CachedLink[] {
   const now = Date.now();
   const msgTs = msgEl.getAttribute('data-msg-ts') ?? undefined;
   const msgChannelId = msgEl.getAttribute('data-msg-channel-id') ?? undefined;
+  const msgAuthor = msgEl.querySelector('[data-qa="message_sender_name"]')?.textContent?.trim() ?? undefined;
+  const rawMsgText = msgEl.querySelector('.p-rich_text_section')?.textContent?.trim();
+  const msgText = rawMsgText ? (rawMsgText.length > 200 ? rawMsgText.slice(0, 200) + '…' : rawMsgText) : undefined;
 
   return contentLinks.map(({ url, text }) => {
     const link: CachedLink = {
@@ -601,12 +629,20 @@ function extractLinksFromMessage(msgEl: Element): CachedLink[] {
       domain: extractDomain(url),
       sourceMsgTs: msgTs,
       sourceChannelId: msgChannelId,
+      sourceMsgAuthor: msgAuthor,
+      sourceMsgText: msgText,
       firstSeenAt: now,
     };
 
     const threadMatch = SLACK_THREAD_URL_PATTERN.exec(url);
     if (threadMatch) {
-      link.threadId = `${threadMatch[1]}:${tsFromSlackP(threadMatch[2])}`;
+      const parsed = parseSlackThreadUrl(url);
+      if (parsed) {
+        link.threadId = `${parsed.channelId}:${parsed.threadTs ?? parsed.messageTs}`;
+        if (parsed.replyTs) link.isReply = true;
+      } else {
+        link.threadId = `${threadMatch[1]}:${tsFromSlackP(threadMatch[2])}`;
+      }
     }
 
     const matched = matchUnfurl(url, unfurls);
@@ -700,6 +736,12 @@ function matchUnfurl(url: string, unfurls: UnfurlData[]): UnfurlData | null {
 // ── Smart Display Names ─────────────────────────────────────────────
 
 function smartDisplayName(url: string, linkText: string): string {
+  const slackMatch = SLACK_THREAD_URL_PATTERN.exec(url);
+  if (slackMatch) {
+    if (linkText && linkText !== url && linkText.length < 80) return linkText;
+    return 'Slack thread';
+  }
+
   const ghMatch = GITHUB_PR_ISSUE_URL_PATTERN.exec(url);
   if (ghMatch) return `${ghMatch[1]}#${ghMatch[2]}`;
 
@@ -815,15 +857,17 @@ function renderButtons(
   }
 
   if (currentSettings.threadLinkedThreads) {
-    const hasLinks = threadLinks.length > 0;
+    const backlinks = cache.backlinks ?? [];
+    const totalCount = threadLinks.length + backlinks.length;
+    const hasLinks = totalCount > 0;
     renderOrUpdateButton(
       headerEl, threadId, BTN_THREADS_CLASS,
-      threadLinks.length,
+      totalCount,
       hasLinks
-        ? (threadLinks.length === 1 ? 'linked thread' : 'linked threads')
+        ? (totalCount === 1 ? 'linked thread' : 'linked threads')
         : 'No linked threads',
       '💬', context, hasLinks,
-      () => showLinkedThreadsDropdown(threadId, threadLinks, headerEl)
+      () => showLinkedThreadsDropdown(threadId, threadLinks, backlinks, headerEl)
     );
   } else {
     const wrapper = headerEl.querySelector(`.se-thread-link-wrapper[data-se-thread="${threadId}"]`);
@@ -1089,20 +1133,7 @@ function renderOrUpdateButton(
 
   let btn = wrapper.querySelector(`.${btnClass}`) as HTMLButtonElement | null;
 
-  if (btn) {
-    btn.innerHTML = '';
-    btn.appendChild(buildButtonContent(icon, count, label, enabled, domains));
-    btn.disabled = !enabled;
-    btn.classList.toggle('se-thread-link-btn--disabled', !enabled);
-    return;
-  }
-
-  btn = document.createElement('button');
-  btn.className = `${btnClass} se-thread-link-btn${enabled ? '' : ' se-thread-link-btn--disabled'}`;
-  btn.appendChild(buildButtonContent(icon, count, label, enabled, domains));
-  btn.type = 'button';
-  btn.disabled = !enabled;
-  btn.addEventListener('click', (e) => {
+  const clickHandler = (e: Event) => {
     e.stopPropagation();
     if (openDropdown && openDropdownTrigger === btn) {
       closeDropdownIfOpen();
@@ -1111,7 +1142,25 @@ function renderOrUpdateButton(
       openDropdownTrigger = btn;
       onClick();
     }
-  });
+  };
+
+  if (btn) {
+    btn.innerHTML = '';
+    btn.appendChild(buildButtonContent(icon, count, label, enabled, domains));
+    btn.disabled = !enabled;
+    btn.classList.toggle('se-thread-link-btn--disabled', !enabled);
+    const fresh = btn.cloneNode(true) as HTMLButtonElement;
+    fresh.addEventListener('click', clickHandler);
+    btn.replaceWith(fresh);
+    return;
+  }
+
+  btn = document.createElement('button');
+  btn.className = `${btnClass} se-thread-link-btn${enabled ? '' : ' se-thread-link-btn--disabled'}`;
+  btn.appendChild(buildButtonContent(icon, count, label, enabled, domains));
+  btn.type = 'button';
+  btn.disabled = !enabled;
+  btn.addEventListener('click', clickHandler);
 
   wrapper.appendChild(btn);
 }
@@ -1504,81 +1553,220 @@ function showExternalLinksDropdown(
   attachDropdown(dropdown);
 }
 
+function buildForwardLinkItem(link: CachedLink, threadId: string, isFlexpane: boolean): HTMLElement {
+  const itemEl = document.createElement('div');
+  itemEl.className = 'se-linked-thread-item';
+
+  const linkEl = document.createElement('a');
+  linkEl.className = 'se-linked-thread-item-content';
+  linkEl.href = link.url;
+  linkEl.addEventListener('click', (e) => {
+    e.preventDefault();
+    closeDropdownIfOpen();
+    const parsed = parseSlackThreadUrl(link.url);
+    if (parsed?.channelId && parsed.threadTs) {
+      requestSpaNav({
+        action: 'openThread',
+        channelId: parsed.channelId,
+        threadTs: parsed.threadTs,
+        replyTs: parsed.replyTs,
+      }).then((result) => {
+        if (!result.success) window.location.href = link.url;
+      }).catch(() => {
+        window.location.href = link.url;
+      });
+    } else {
+      window.location.href = link.url;
+    }
+  });
+
+  if (link.isReply) {
+    const replyLabel = document.createElement('div');
+    replyLabel.className = 'se-linked-thread-reply-label';
+    replyLabel.textContent = 'Reply in thread';
+    linkEl.appendChild(replyLabel);
+  }
+
+  if (link.authorName) {
+    const authorEl = document.createElement('div');
+    authorEl.className = 'se-linked-thread-author';
+    authorEl.textContent = link.authorName;
+    linkEl.appendChild(authorEl);
+  }
+
+  const previewEl = document.createElement('div');
+  previewEl.className = 'se-linked-thread-preview';
+  previewEl.textContent = link.messagePreview ?? link.title ?? link.url;
+  linkEl.appendChild(previewEl);
+
+  const footerParts: string[] = [];
+  if (link.channelName) footerParts.push(`Thread in #${link.channelName}`);
+  const linkedThreadTs = link.threadId?.split(':')[1];
+  if (linkedThreadTs) {
+    const date = new Date(parseFloat(linkedThreadTs) * 1000);
+    footerParts.push(date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }));
+  }
+  if (footerParts.length > 0) {
+    const footerEl = document.createElement('div');
+    footerEl.className = 'se-linked-thread-footer';
+    footerEl.textContent = footerParts.join(' · ');
+    linkEl.appendChild(footerEl);
+  }
+
+  itemEl.appendChild(linkEl);
+  const gotoBtn = createGoToMessageButton(link, threadId, isFlexpane);
+  if (gotoBtn) itemEl.appendChild(gotoBtn);
+  itemEl.appendChild(createOpenInNewTabButton(link.url));
+  itemEl.appendChild(createCopyButton(link.url));
+
+  return itemEl;
+}
+
+function buildBacklinkItem(backlink: Backlink): HTMLElement {
+  const itemEl = document.createElement('div');
+  itemEl.className = 'se-linked-thread-item';
+
+  const linkEl = document.createElement('a');
+  linkEl.className = 'se-linked-thread-item-content';
+  linkEl.href = backlink.sourceUrl;
+  linkEl.addEventListener('click', (e) => {
+    e.preventDefault();
+    closeDropdownIfOpen();
+    const parsed = parseSlackThreadUrl(backlink.sourceUrl);
+    if (parsed?.channelId && parsed.threadTs) {
+      requestSpaNav({
+        action: 'openThread',
+        channelId: parsed.channelId,
+        threadTs: parsed.threadTs,
+        replyTs: parsed.replyTs,
+      }).then((result) => {
+        if (!result.success) window.location.href = backlink.sourceUrl;
+      }).catch(() => {
+        window.location.href = backlink.sourceUrl;
+      });
+    } else {
+      window.location.href = backlink.sourceUrl;
+    }
+  });
+
+  const hasLinkContent = backlink.linkAuthorName || backlink.linkPreview;
+  const isReply = !!parseSlackThreadUrl(backlink.sourceUrl)?.replyTs;
+
+  if (hasLinkContent) {
+    if (isReply) {
+      const replyLabel = document.createElement('div');
+      replyLabel.className = 'se-linked-thread-reply-label';
+      replyLabel.textContent = 'Reply in thread';
+      linkEl.appendChild(replyLabel);
+    }
+
+    if (backlink.linkAuthorName) {
+      const authorEl = document.createElement('div');
+      authorEl.className = 'se-linked-thread-author';
+      authorEl.textContent = backlink.linkAuthorName;
+      linkEl.appendChild(authorEl);
+    }
+
+    const previewEl = document.createElement('div');
+    previewEl.className = 'se-linked-thread-preview';
+    previewEl.textContent = backlink.linkPreview ?? backlink.sourceUrl;
+    linkEl.appendChild(previewEl);
+
+    if (backlink.rootInfo?.author || backlink.rootInfo?.text) {
+      const contextEl = document.createElement('div');
+      contextEl.className = 'se-linked-thread-context';
+      const parts: string[] = [];
+      if (backlink.rootInfo.author) parts.push(backlink.rootInfo.author);
+      if (backlink.rootInfo.text) parts.push(backlink.rootInfo.text);
+      contextEl.textContent = `↩ Thread by ${parts.join(': ')}`;
+      linkEl.appendChild(contextEl);
+    }
+  } else {
+    if (backlink.rootInfo?.author) {
+      const authorEl = document.createElement('div');
+      authorEl.className = 'se-linked-thread-author';
+      authorEl.textContent = backlink.rootInfo.author;
+      linkEl.appendChild(authorEl);
+    }
+
+    const previewEl = document.createElement('div');
+    previewEl.className = 'se-linked-thread-preview';
+    previewEl.textContent = backlink.rootInfo?.text ?? backlink.sourceUrl;
+    linkEl.appendChild(previewEl);
+  }
+
+  const footerParts: string[] = [];
+  const channelName = backlink.linkChannelName ?? backlink.rootInfo?.channelName;
+  if (channelName) footerParts.push(`Thread in #${channelName}`);
+  if (backlink.rootInfo?.date) {
+    footerParts.push(backlink.rootInfo.date);
+  } else {
+    const ts = backlink.sourceThreadId.split(':')[1];
+    if (ts) {
+      const date = new Date(parseFloat(ts) * 1000);
+      footerParts.push(date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }));
+    }
+  }
+  if (footerParts.length > 0) {
+    const footerEl = document.createElement('div');
+    footerEl.className = 'se-linked-thread-footer';
+    footerEl.textContent = footerParts.join(' · ');
+    linkEl.appendChild(footerEl);
+  }
+
+  itemEl.appendChild(linkEl);
+  itemEl.appendChild(createOpenInNewTabButton(backlink.sourceUrl));
+  itemEl.appendChild(createCopyButton(backlink.sourceUrl));
+
+  return itemEl;
+}
+
 function showLinkedThreadsDropdown(
   threadId: string,
-  links: CachedLink[],
+  forwardLinks: CachedLink[],
+  backlinks: Backlink[],
   headerEl: Element
 ) {
   const isFlexpane = !!headerEl.closest('[data-qa="threads_flexpane"]') || !!headerEl.closest('.p-flexpane_header__primary');
   const dropdown = document.createElement('div');
   dropdown.className = DROPDOWN_CLASS;
 
-  const sorted = [...links].sort((a, b) => {
+  const sortedForward = [...forwardLinks].sort((a, b) => {
     const aTs = a.threadId?.split(':')[1] ?? '0';
     const bTs = b.threadId?.split(':')[1] ?? '0';
     return parseFloat(bTs) - parseFloat(aTs);
   });
 
-  for (const link of sorted) {
-    const itemEl = document.createElement('div');
-    itemEl.className = 'se-linked-thread-item';
+  const sortedBacklinks = [...backlinks].sort((a, b) => {
+    const aTs = a.sourceThreadId.split(':')[1] ?? '0';
+    const bTs = b.sourceThreadId.split(':')[1] ?? '0';
+    return parseFloat(bTs) - parseFloat(aTs);
+  });
 
-    const linkEl = document.createElement('a');
-    linkEl.className = 'se-linked-thread-item-content';
-    linkEl.href = link.url;
-    linkEl.addEventListener('click', (e) => {
-      e.preventDefault();
-      closeDropdownIfOpen();
-      const parsed = parseSlackThreadUrl(link.url);
-      if (parsed?.channelId && parsed.threadTs) {
-        requestSpaNav({
-          action: 'openThread',
-          channelId: parsed.channelId,
-          threadTs: parsed.threadTs,
-          replyTs: parsed.replyTs,
-        }).then((result) => {
-          if (!result.success) window.location.href = link.url;
-        }).catch(() => {
-          window.location.href = link.url;
-        });
-      } else {
-        window.location.href = link.url;
+  if (backlinks.length > 0) {
+    if (sortedForward.length > 0) {
+      const sectionHeader = document.createElement('div');
+      sectionHeader.className = 'se-linked-threads-section-header';
+      sectionHeader.textContent = 'Links from this thread';
+      dropdown.appendChild(sectionHeader);
+
+      for (const link of sortedForward) {
+        dropdown.appendChild(buildForwardLinkItem(link, threadId, isFlexpane));
       }
-    });
-
-    if (link.authorName) {
-      const authorEl = document.createElement('div');
-      authorEl.className = 'se-linked-thread-author';
-      authorEl.textContent = link.authorName;
-      linkEl.appendChild(authorEl);
     }
 
-    const previewEl = document.createElement('div');
-    previewEl.className = 'se-linked-thread-preview';
-    previewEl.textContent = link.messagePreview ?? link.title ?? link.url;
-    linkEl.appendChild(previewEl);
+    const backlinkHeader = document.createElement('div');
+    backlinkHeader.className = 'se-linked-threads-section-header';
+    backlinkHeader.textContent = 'Links to this thread';
+    dropdown.appendChild(backlinkHeader);
 
-    const footerParts: string[] = [];
-    if (link.channelName) footerParts.push(`Thread in #${link.channelName}`);
-    const linkedThreadTs = link.threadId?.split(':')[1];
-    if (linkedThreadTs) {
-      const date = new Date(parseFloat(linkedThreadTs) * 1000);
-      footerParts.push(date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }));
+    for (const backlink of sortedBacklinks) {
+      dropdown.appendChild(buildBacklinkItem(backlink));
     }
-    if (footerParts.length > 0) {
-      const footerEl = document.createElement('div');
-      footerEl.className = 'se-linked-thread-footer';
-      footerEl.textContent = footerParts.join(' · ');
-      linkEl.appendChild(footerEl);
+  } else {
+    for (const link of sortedForward) {
+      dropdown.appendChild(buildForwardLinkItem(link, threadId, isFlexpane));
     }
-
-    itemEl.appendChild(linkEl);
-    const gotoBtn = createGoToMessageButton(link, threadId, isFlexpane);
-    if (gotoBtn) itemEl.appendChild(gotoBtn);
-    itemEl.appendChild(createOpenInNewTabButton(link.url));
-    itemEl.appendChild(createCopyButton(link.url));
-
-    dropdown.appendChild(itemEl);
   }
 
   const wrapper = headerEl.querySelector(`.se-thread-link-wrapper`);

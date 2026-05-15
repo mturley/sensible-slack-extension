@@ -28,8 +28,11 @@ export interface CachedLink {
   channelName?: string;
   messagePreview?: string;
   threadId?: string;
+  isReply?: boolean;
   sourceMsgTs?: string;
   sourceChannelId?: string;
+  sourceMsgAuthor?: string;
+  sourceMsgText?: string;
   firstSeenAt: number;
 }
 
@@ -40,9 +43,20 @@ export interface ThreadRootInfo {
   date?: string;
 }
 
+export interface Backlink {
+  sourceThreadId: string;
+  sourceUrl: string;
+  rootInfo?: ThreadRootInfo;
+  linkAuthorName?: string;
+  linkPreview?: string;
+  linkChannelName?: string;
+  firstSeenAt: number;
+}
+
 export interface ThreadLinkCache {
   threadId: string;
   links: CachedLink[];
+  backlinks?: Backlink[];
   processedMsgTimestamps: string[];
   rootInfo?: ThreadRootInfo;
   lastUpdated: number;
