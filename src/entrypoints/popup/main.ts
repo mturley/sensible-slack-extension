@@ -89,7 +89,7 @@ function initPurgeButton() {
       await purgeCache('all');
       await updateCacheStats();
     } finally {
-      purgeBtn.textContent = 'Purge all cached links';
+      purgeBtn.textContent = 'Purge all';
       purgeBtn.removeAttribute('disabled');
     }
   });

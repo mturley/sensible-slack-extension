@@ -222,16 +222,19 @@ h2 {
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid #e0e0e0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .cache-stats {
   font-size: 12px;
   color: #616061;
-  margin-bottom: 8px;
 }
 
 .purge-btn {
-  width: 100%;
+  flex-shrink: 0;
   padding: 4px 12px;
   border: 1px solid #ccc;
   border-radius: 4px;
