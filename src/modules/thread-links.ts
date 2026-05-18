@@ -27,6 +27,7 @@ let flexpaneScrollEl: Element | null = null;
 const threadCacheMap = new Map<string, ThreadLinkCache>();
 const githubPrLookedUp = new Set<string>();
 const backlinksSynced = new Set<string>();
+const enrichedFromVisit = new Set<string>();
 
 const SCANNED_MARKER = 'data-se-links-scanned';
 const BTN_TOP_CLASS = 'se-top-of-thread-btn';
@@ -78,6 +79,7 @@ export function destroyThreadLinks() {
   githubPrLookedUp.clear();
   threadCacheMap.clear();
   backlinksSynced.clear();
+  enrichedFromVisit.clear();
 
   if (debounceTimer) {
     clearTimeout(debounceTimer);
@@ -501,6 +503,7 @@ async function persistAndUpdateUI(
   if (dirty) {
     await saveThreadLinks(cache);
     backlinksSynced.delete(threadId);
+    enrichedFromVisit.delete(threadId);
   }
 
   const needsBacklinkSync = !backlinksSynced.has(threadId);
@@ -536,6 +539,7 @@ async function persistAndUpdateUI(
   if (container) {
     renderButtons(threadId, cache, container, context);
     enrichGitHubPRs(threadId, cache, container, context);
+    enrichLinksFromVisitedThread(threadId, cache, container);
   }
 
   if (floatingContainer?.getAttribute('data-se-thread') === threadId) {
@@ -593,6 +597,66 @@ async function enrichGitHubPRs(
     await saveThreadLinks(cache);
     threadCacheMap.set(threadId, cache);
     renderButtons(threadId, cache, container, context);
+  }
+}
+
+async function enrichLinksFromVisitedThread(
+  threadId: string,
+  cache: ThreadLinkCache,
+  container: Element
+) {
+  if (enrichedFromVisit.has(threadId)) return;
+  enrichedFromVisit.add(threadId);
+
+  const msgInfoMap = new Map<string, { author?: string; text?: string }>();
+  const messages = container.querySelectorAll('[data-qa="message_container"]');
+  for (const msg of messages) {
+    const msgTs = msg.getAttribute('data-msg-ts');
+    if (!msgTs) continue;
+    const author = msg.querySelector('[data-qa="message_sender_name"]')?.textContent?.trim();
+    const rawText = msg.querySelector('.p-rich_text_section')?.textContent?.trim();
+    const text = rawText ? (rawText.length > 200 ? rawText.slice(0, 200) + '…' : rawText) : undefined;
+    if (author || text) {
+      msgInfoMap.set(msgTs, { author, text });
+    }
+  }
+
+  if (msgInfoMap.size === 0 && !cache.rootInfo) return;
+
+  for (const [otherThreadId, otherCache] of threadCacheMap) {
+    if (otherThreadId === threadId) continue;
+
+    let updated = false;
+    for (const link of otherCache.links) {
+      if (!link.threadId || link.threadId !== threadId) continue;
+      if (link.authorName && link.messagePreview) continue;
+
+      const parsed = parseSlackThreadUrl(link.url);
+      const replyTs = parsed?.replyTs;
+
+      if (replyTs) {
+        const info = msgInfoMap.get(replyTs);
+        if (info) {
+          if (info.author && !link.authorName) link.authorName = info.author;
+          if (info.text && !link.messagePreview) link.messagePreview = info.text;
+          updated = true;
+        }
+      } else if (cache.rootInfo) {
+        if (cache.rootInfo.author && !link.authorName) link.authorName = cache.rootInfo.author;
+        if (cache.rootInfo.text && !link.messagePreview) link.messagePreview = cache.rootInfo.text;
+        updated = true;
+      }
+    }
+
+    if (updated) {
+      await saveThreadLinks(otherCache);
+      threadCacheMap.set(otherThreadId, otherCache);
+      const wrapper = document.querySelector(`.se-thread-link-wrapper[data-se-thread="${otherThreadId}"]`);
+      if (wrapper?.parentElement) {
+        const ctx = wrapper.closest('[data-qa="threads_flexpane"]') ? 'flexpane' as const : 'threads-page' as const;
+        renderButtons(otherThreadId, otherCache, wrapper.parentElement, ctx);
+      }
+    }
   }
 }
 
