@@ -44,11 +44,15 @@ Surfaces all external links shared in a thread via a button in the thread header
 
 ### Thread Linked Threads Dropdown
 
-Surfaces links to other Slack threads that appear in the current thread.
+Surfaces links to other Slack threads that appear in the current thread, including backlinks from threads that link to this one.
 
-- A **"N linked threads"** button appears alongside the external links button.
-- Clicking opens a dropdown showing each linked thread with its channel name, author, and a message preview (when available from Slack's unfurl).
+- A **"N linked threads"** button appears alongside the external links button. The count includes both outgoing links and backlinks.
+- Clicking opens a dropdown showing each linked thread with its channel name, author, and a message preview (when available from Slack's link preview or from visiting the linked thread).
+- When backlinks exist, the dropdown splits into **"Links from this thread"** and **"Links to this thread"** sections. If there are no backlinks, the dropdown renders as a flat list.
+- Links to specific replies are labeled **"Reply in thread"** and show the parent thread context.
+- Backlinks are created automatically when any cached thread contains a link to the current thread.
 - Threads are deduplicated and sorted most-recent-first.
+- Link previews showing "Slack thread" placeholders are enriched with actual message content when you visit the linked thread.
 
 ### Link Cache Management
 
