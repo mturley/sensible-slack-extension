@@ -26,6 +26,7 @@ let flexpaneScrollHandler: (() => void) | null = null;
 let flexpaneScrollEl: Element | null = null;
 const threadCacheMap = new Map<string, ThreadLinkCache>();
 const githubPrLookedUp = new Set<string>();
+const backlinksSynced = new Set<string>();
 
 const SCANNED_MARKER = 'data-se-links-scanned';
 const BTN_TOP_CLASS = 'se-top-of-thread-btn';
@@ -76,6 +77,7 @@ export function destroyThreadLinks() {
   flexpaneThreadId = null;
   githubPrLookedUp.clear();
   threadCacheMap.clear();
+  backlinksSynced.clear();
 
   if (debounceTimer) {
     clearTimeout(debounceTimer);
@@ -498,7 +500,12 @@ async function persistAndUpdateUI(
 
   if (dirty) {
     await saveThreadLinks(cache);
+    backlinksSynced.delete(threadId);
+  }
 
+  const needsBacklinkSync = !backlinksSynced.has(threadId);
+  const hasThreadLinks = needsBacklinkSync && cache.links.some((l) => l.threadId && l.threadId !== threadId);
+  if (hasThreadLinks) {
     const [ch, ts] = threadId.split(':');
     const buildSourceUrl = (sourceMsgTs?: string) => {
       const msgTs = sourceMsgTs ?? ts;
@@ -510,6 +517,7 @@ async function persistAndUpdateUI(
       return base;
     };
     const updatedTargets = await addBacklinksForThread(cache, buildSourceUrl);
+    backlinksSynced.add(threadId);
     for (const targetId of updatedTargets) {
       const refreshed = await getThreadLinks(targetId);
       if (refreshed) {
