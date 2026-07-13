@@ -433,10 +433,32 @@ wsStore.dispatch(navigateFn(view));
 
 ### What CHANGES across deploys
 
-- Webpack module IDs (numeric strings)
+- Module IDs — **numeric/hex under webpack, quoted string ids under rspack**
+  (see the bundler note below)
 - Export key names (single letters like `.O`, `.A`, `.UX`, `.R9`)
 - React fiber key suffixes (`__reactContainer$xxxxx`)
 - Minified variable names in thunk/component source code
+- The chunk-push global name — `webpackChunkwebapp` (webpack) vs
+  `rspackChunkwebapp` (rspack)
+
+### Bundler note: webpack → rspack (observed 2026-07)
+
+Slack migrated its web client from webpack to rspack. Two things changed that
+break a naive port of the code above:
+
+1. The chunk-push global is now `rspackChunkwebapp`, not `webpackChunkwebapp`.
+   `getWebpackRequire` should scan for any `window` key matching `/Chunk/i` and
+   use whichever yields a require with a module map — and use a **unique** probe
+   chunk id per attempt (a bundler ignores the runtime callback for an
+   already-installed chunk id, so a fixed id fails on the second call).
+2. Module ids in minified source are now **quoted strings** (`i=a("k2p9")`)
+   instead of hex (`i=a(0x2a3)`). The import-tracing regex must accept string
+   (and decimal) ids, not just `0x[0-9a-f]+`, and resolve them straight to the
+   `r.m` key rather than `parseInt(..., 16)`.
+
+Everything else — the `bootData` store discovery, the `"Opens the threads
+flexpane"` anchor string, and the `dispatch(navigate(threadView(...)))` shape —
+is unchanged.
 
 ### How the API handles this
 

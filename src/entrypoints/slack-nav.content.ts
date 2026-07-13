@@ -11,23 +11,36 @@ export default defineContentScript({
     let navigateFn: ((view: any) => any) | null = null;
     let threadViewFn: ((opts: any) => any) | null = null;
 
+    let probeSeq = 0;
+
     function getWebpackRequire(): WebpackRequire {
       if (wr) return wr;
-      let captured: WebpackRequire | null = null;
-      try {
-        (window as any).webpackChunkwebapp.push([
-          ['__sensible_slack_probe__'],
-          {},
-          function (require: WebpackRequire) {
-            captured = require;
-          },
-        ]);
-      } catch (_e) {
-        // probe chunk may throw after giving us require
+      // Slack migrated its bundler webpack -> rspack, which renamed the chunk
+      // global from `webpackChunkwebapp` to `rspackChunkwebapp`. Accept any
+      // `*Chunk*` global that yields a require with a module map, so this keeps
+      // working across that (and future) bundler renames.
+      const chunkGlobals = Object.keys(window).filter((k) => /Chunk/i.test(k));
+      for (const key of chunkGlobals) {
+        let captured: WebpackRequire | null = null;
+        try {
+          // Unique chunk id per attempt: a bundler ignores the runtime callback
+          // for an already-installed chunk id, so a fixed id fails on retry.
+          (window as any)[key].push([
+            [`__sensible_slack_probe_${++probeSeq}__`],
+            {},
+            function (require: WebpackRequire) {
+              captured = require;
+            },
+          ]);
+        } catch (_e) {
+          // probe chunk may throw after giving us require
+        }
+        if (captured && (captured as WebpackRequire).m) {
+          wr = captured;
+          return wr;
+        }
       }
-      if (!captured) throw new Error('Failed to obtain __webpack_require__');
-      wr = captured;
-      return wr;
+      throw new Error('Failed to obtain __webpack_require__ (no *Chunk* global)');
     }
 
     function getWorkspaceStore() {
@@ -64,6 +77,19 @@ export default defineContentScript({
       throw new Error('Workspace store not found');
     }
 
+    // Resolve a module id as it appears in minified source — webpack hex
+    // (`0x2a3`), decimal, or an rspack quoted string id (`"k2p9"`) — to the key
+    // the bundler actually registers in `r.m`.
+    function resolveModuleId(r: WebpackRequire, raw: string): string | null {
+      const candidates = [raw];
+      if (/^0x[0-9a-f]+$/i.test(raw)) candidates.push(parseInt(raw, 16).toString());
+      if (/^\d+$/.test(raw)) candidates.push(String(Number(raw)));
+      for (const c of candidates) {
+        if (Object.prototype.hasOwnProperty.call(r.m, c)) return c;
+      }
+      return null;
+    }
+
     // Find the navigate function and thread view constructor by tracing imports
     // from the "Opens the threads flexpane" thunk, which directly imports both.
     // This thunk's source contains calls like:
@@ -79,10 +105,11 @@ export default defineContentScript({
         const src = r.m[id].toString();
         if (!src.includes(desc)) continue;
 
-        // Find the navigate call pattern: e((0,VAR1.KEY1)((0,VAR2.KEY2)({...})))
-        // This matches the nested call where navigate wraps the view constructor
+        // Find the navigate call pattern: DISP((0,VAR1.KEY1)((0,VAR2.KEY2)({...})))
+        // This matches the nested call where navigate wraps the view constructor.
+        // DISP is whatever the minifier named the dispatch param — don't assume `e`.
         const nestedMatch = src.match(
-          /e\(\(0,(\w+)\.(\w+)\)\(\(0,(\w+)\.(\w+)\)\(\{/,
+          /[\w$]+\(\(0,([\w$]+)\.([\w$]+)\)\(\(0,([\w$]+)\.([\w$]+)\)\(\{/,
         );
         if (!nestedMatch) continue;
 
@@ -91,13 +118,18 @@ export default defineContentScript({
         const viewVar = nestedMatch[3];
         const viewKey = nestedMatch[4];
 
-        // Map local variables to their import hex IDs
-        const navImport = src.match(new RegExp(`(?:^|,)${navVar}=a\\((0x[0-9a-f]+)\\)`));
-        const viewImport = src.match(new RegExp(`(?:^|,)${viewVar}=a\\((0x[0-9a-f]+)\\)`));
+        // Map local variables to their import module IDs. webpack minifies these
+        // as hex (`i=a(0x2a3)`); rspack uses STRING ids (`i=a("k2p9")`). Accept
+        // both (plus decimal), and don't assume the require alias is `a`.
+        const importRe = (v: string) =>
+          src.match(new RegExp(`[^\\w$]${v}\\s*=\\s*[\\w$]+\\(\\s*(["']?)([\\w$.-]+)\\1\\s*\\)`));
+        const navImport = importRe(navVar);
+        const viewImport = importRe(viewVar);
         if (!navImport || !viewImport) continue;
 
-        const navModId = parseInt(navImport[1], 16).toString();
-        const viewModId = parseInt(viewImport[1], 16).toString();
+        const navModId = resolveModuleId(r, navImport[2]);
+        const viewModId = resolveModuleId(r, viewImport[2]);
+        if (!navModId || !viewModId) continue;
 
         try {
           const navMod = r(navModId);
